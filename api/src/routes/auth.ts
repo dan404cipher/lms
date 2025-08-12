@@ -1,0 +1,42 @@
+import express from 'express';
+import { body } from 'express-validator';
+import { register, login, refreshToken, forgotPassword, resetPassword, verifyEmail, getProfile, updateProfile } from '../controllers/authController';
+import { protect } from '../middleware/auth';
+
+const router = express.Router();
+
+// Validation middleware
+const registerValidation = [
+  body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be between 2 and 50 characters'),
+  body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('role').optional().isIn(['learner', 'instructor']).withMessage('Invalid role')
+];
+
+const loginValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email'),
+  body('password').notEmpty().withMessage('Password is required')
+];
+
+const forgotPasswordValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email')
+];
+
+const resetPasswordValidation = [
+  body('token').notEmpty().withMessage('Reset token is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+];
+
+// Routes
+router.post('/register', registerValidation, register);
+router.post('/login', loginValidation, login);
+router.post('/refresh-token', refreshToken);
+router.post('/forgot-password', forgotPasswordValidation, forgotPassword);
+router.post('/reset-password', resetPasswordValidation, resetPassword);
+router.post('/verify-email/:token', verifyEmail);
+
+// Protected routes
+router.get('/profile', protect, getProfile);
+router.put('/profile', protect, updateProfile);
+
+export default router;
