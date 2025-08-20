@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import sessionService, { Session, Recording } from "@/services/sessionService";
 import {
@@ -32,6 +33,8 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("sessions");
+  const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -205,6 +208,42 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
     }
   };
 
+  const handleWatchRecording = async (sessionId: string) => {
+    try {
+      // Find recording from the already loaded recordings
+      const sessionRecording = recordings.find(r => r.sessionId === sessionId);
+      
+      if (sessionRecording) {
+        setSelectedRecording(sessionRecording);
+        setShowVideoPlayer(true);
+      } else {
+        // Fallback: try to fetch from API
+        setLoading(true);
+        const response = await sessionService.getSessionRecordings(sessionId);
+        
+        if (response.success && response.data.recordings.length > 0) {
+          const recording = response.data.recordings[0];
+          setSelectedRecording(recording);
+          setShowVideoPlayer(true);
+        } else {
+          toast({
+            title: "No Recordings",
+            description: "No recordings found for this session",
+            variant: "default"
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load recording",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteSession = async (sessionId: string) => {
     if (!confirm("Are you sure you want to delete this session?")) return;
 
@@ -337,48 +376,7 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
                           )}
                         </div>
 
-                        {session.hasRecording && (
-                          <div className="mt-3 p-3 bg-muted/20 rounded-lg border">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Play className="h-4 w-4 text-green-600" />
-                                <span className="text-sm font-medium">Recording Available</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    // Find and play the recording for this session
-                                    const sessionRecording = recordings.find(r => r.sessionId === session._id);
-                                    if (sessionRecording) {
-                                      // Open the recording URL directly
-                                      window.open(sessionRecording.recordingUrl, '_blank');
-                                    } else {
-                                      alert('No recording found for this session.');
-                                    }
-                                  }}
-                                >
-                                  <Play className="h-4 w-4 mr-2" />
-                                  Watch
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    const sessionRecording = recordings.find(r => r.sessionId === session._id);
-                                    if (sessionRecording) {
-                                      handleDownloadRecording(sessionRecording._id, sessionRecording.title);
-                                    }
-                                  }}
-                                >
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Download
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+
                       </div>
 
                       <div className="flex items-center gap-2 ml-4">
@@ -440,6 +438,17 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
                               </Button>
                             )}
                             
+                            {session.hasRecording && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleWatchRecording(session._id)}
+                              >
+                                <Play className="h-4 w-4 mr-2" />
+                                Watch Recording
+                              </Button>
+                            )}
+                            
                             <Button
                               size="sm"
                               variant="ghost"
@@ -468,6 +477,65 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
           </div>
         )}
       </div>
+
+      {/* Video Player Modal */}
+      <Dialog open={showVideoPlayer} onOpenChange={setShowVideoPlayer}>
+        <DialogContent className="max-w-4xl w-full">
+          <DialogHeader>
+            <DialogTitle>{selectedRecording?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedRecording && (
+              <div className="relative">
+                <video
+                  controls
+                  className="w-full h-auto max-h-[70vh] rounded-lg shadow-sm"
+                  preload="metadata"
+                  autoPlay
+                  onError={(e) => {
+                    console.error('Video error:', e);
+                    toast({
+                      title: "Video Error",
+                      description: "Could not load the recording. Please try downloading it instead.",
+                      variant: "destructive"
+                    });
+                  }}
+                >
+                  <source src={selectedRecording.recordingUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+                
+                {/* Recording Info */}
+                <div className="mt-4 p-3 bg-muted/20 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{selectedRecording.title}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Duration: {Math.floor(selectedRecording.duration / 60)}:{(selectedRecording.duration % 60).toString().padStart(2, '0')}</span>
+                        <span>Views: {selectedRecording.viewCount}</span>
+                        <span>Recorded: {new Date(selectedRecording.recordedAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = selectedRecording.recordingUrl;
+                        link.download = `${selectedRecording.title}.mp4`;
+                        link.click();
+                      }}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

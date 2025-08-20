@@ -712,11 +712,8 @@ export const getRecordings = async (req: AuthRequest, res: Response, next: NextF
 
     console.log('Recording query:', query);
 
-    // Get recordings from database
-    const recordings = await Recording.find(query)
-      .populate('sessionId', 'title type')
-      .populate('courseId', 'title')
-      .sort({ recordedAt: -1 });
+    // Get recordings from database without populate to avoid 500 errors
+    const recordings = await Recording.find(query).sort({ recordedAt: -1 });
 
     console.log(`Found ${recordings.length} recordings`);
 
@@ -738,6 +735,7 @@ export const getRecordings = async (req: AuthRequest, res: Response, next: NextF
     });
   } catch (error) {
     console.error('Error in getRecordings:', error);
+    console.error('Error stack:', (error as Error).stack);
     res.status(500).json({
       success: false,
       message: 'Error fetching recordings',
