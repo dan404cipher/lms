@@ -25,9 +25,10 @@ import {
 interface SessionsAndRecordingsProps {
   courseId: string;
   isInstructor: boolean;
+  isAdmin?: boolean;
 }
 
-const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordingsProps) => {
+const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: SessionsAndRecordingsProps) => {
   const { toast } = useToast();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -393,7 +394,7 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
 
                         {status === 'upcoming' && (
                           <>
-                            {isInstructor ? (
+                            {(isInstructor || isAdmin) ? (
                               <Button
                                 size="sm"
                                 onClick={() => handleStartSession(session._id)}
@@ -414,7 +415,7 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
                           </>
                         )}
 
-                        {isInstructor && (
+                        {(isInstructor || isAdmin) && (
                           <>
                             {status === 'live' && (
                               <Button
@@ -470,7 +471,7 @@ const SessionsAndRecordings = ({ courseId, isInstructor }: SessionsAndRecordings
             <Video className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">No sessions scheduled</h3>
             <p className="text-muted-foreground">
-              {isInstructor 
+              {(isInstructor || isAdmin)
                 ? "Schedule your first live session to get started." 
                 : "Your instructor hasn't scheduled any sessions yet."}
             </p>

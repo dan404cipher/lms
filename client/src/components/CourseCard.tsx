@@ -76,7 +76,7 @@ const CourseCard = ({
 
         <Button className="w-full" variant="hero">
           <BookOpen className="h-4 w-4 mr-2" />
-          Enroll Now
+          View Course
         </Button>
       </div>
     </div>

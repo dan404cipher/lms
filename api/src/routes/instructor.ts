@@ -1,5 +1,6 @@
 import express from 'express';
 import { protect, authorize } from '../middleware/auth';
+import { upload } from '../middleware/upload';
 import {
   getMyCourses,
   getCourseDetail,
@@ -70,7 +71,7 @@ router.put('/courses/:courseId/assessments/:assessmentId', updateAssessment);
 router.delete('/courses/:courseId/assessments/:assessmentId', deleteAssessment);
 
 // Material Management
-router.post('/courses/:courseId/materials', uploadMaterial);
+router.post('/courses/:courseId/materials', upload.single('material'), uploadMaterial);
 router.put('/courses/:courseId/materials/:materialId', updateMaterial);
 router.delete('/courses/:courseId/materials/:materialId', deleteMaterial);
 

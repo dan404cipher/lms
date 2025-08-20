@@ -2,6 +2,47 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+// Create axios instance with auth interceptor
+const sessionAxios = axios.create({ baseURL: API_BASE_URL });
+
+sessionAxios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+sessionAxios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {
+            refreshToken
+          });
+          if (refreshResponse.data.success) {
+            localStorage.setItem('token', refreshResponse.data.data.token);
+            localStorage.setItem('refreshToken', refreshResponse.data.data.refreshToken);
+            error.config.headers.Authorization = `Bearer ${refreshResponse.data.data.token}`;
+            return sessionAxios(error.config);
+          }
+        } catch (refreshError) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          window.location.href = '/login';
+        }
+      } else {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export interface SessionData {
   courseId: string;
   title: string;
@@ -47,99 +88,72 @@ export interface Recording {
 class SessionService {
   // Session Management
   async createSession(sessionData: SessionData): Promise<{ success: boolean; data: { session: Session } }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions`, sessionData, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post('/sessions', sessionData);
     return response.data;
   }
 
   async getSessions(courseId?: string): Promise<{ success: boolean; data: { sessions: Session[] } }> {
     const params = courseId ? { courseId } : {};
-    const response = await axios.get(`${API_BASE_URL}/sessions`, {
-      params,
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.get('/sessions', { params });
     return response.data;
   }
 
   async getSession(sessionId: string): Promise<{ success: boolean; data: { session: Session } }> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/${sessionId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.get(`/sessions/${sessionId}`);
     return response.data;
   }
 
   async updateSession(sessionId: string, updateData: Partial<SessionData>): Promise<{ success: boolean; data: { session: Session } }> {
-    const response = await axios.put(`${API_BASE_URL}/sessions/${sessionId}`, updateData, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.put(`/sessions/${sessionId}`, updateData);
     return response.data;
   }
 
   async deleteSession(sessionId: string): Promise<{ success: boolean }> {
-    const response = await axios.delete(`${API_BASE_URL}/sessions/${sessionId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.delete(`/sessions/${sessionId}`);
     return response.data;
   }
 
   async startSession(sessionId: string): Promise<{ success: boolean; data: { joinUrl: string } }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/start`, {}, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post(`/sessions/${sessionId}/start`, {});
     return response.data;
   }
 
   async endSession(sessionId: string): Promise<{ success: boolean }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/end`, {}, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post(`/sessions/${sessionId}/end`, {});
     return response.data;
   }
 
   async joinSession(sessionId: string): Promise<{ success: boolean; data: { joinUrl: string } }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/join`, {}, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post(`/sessions/${sessionId}/join`, {});
     return response.data;
   }
 
   // Recording Management
   async getRecordings(courseId?: string): Promise<{ success: boolean; data: { recordings: Recording[] } }> {
     const params = courseId ? { courseId } : {};
-    const response = await axios.get(`${API_BASE_URL}/sessions/recordings`, {
-      params,
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.get('/sessions/recordings', { params });
     return response.data;
   }
 
   async getSessionRecordings(sessionId: string): Promise<{ success: boolean; data: { recordings: Recording[] } }> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/${sessionId}/recordings`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.get(`/sessions/${sessionId}/recordings`);
     return response.data;
   }
 
   async downloadRecording(recordingId: string): Promise<Blob> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/recordings/${recordingId}/download`, {
-      headers: this.getAuthHeaders(),
+    const response = await sessionAxios.get(`/sessions/recordings/${recordingId}/download`, {
       responseType: 'blob'
     });
     return response.data;
   }
 
   async downloadRecordingToServer(sessionId: string): Promise<{ success: boolean; message: string; data?: any }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/download-recording`, {}, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post(`/sessions/${sessionId}/download-recording`, {});
     return response.data;
   }
 
   async checkForRecordings(sessionId: string): Promise<{ success: boolean; message: string; data?: any }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/check-recordings`, {}, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post(`/sessions/${sessionId}/check-recordings`, {});
     return response.data;
   }
 
@@ -148,9 +162,8 @@ class SessionService {
     formData.append('recording', file);
     formData.append('title', `${file.name} - Recording`);
     
-    const response = await axios.post(`${API_BASE_URL}/recordings/upload/${sessionId}`, formData, {
+    const response = await sessionAxios.post(`/recordings/upload/${sessionId}`, formData, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'multipart/form-data'
       }
     });
@@ -158,31 +171,23 @@ class SessionService {
   }
 
   async updateRecording(recordingId: string, updateData: { title?: string; isPublic?: boolean }): Promise<{ success: boolean }> {
-    const response = await axios.put(`${API_BASE_URL}/sessions/recordings/${recordingId}`, updateData, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.put(`/sessions/recordings/${recordingId}`, updateData);
     return response.data;
   }
 
   async deleteRecording(recordingId: string): Promise<{ success: boolean }> {
-    const response = await axios.delete(`${API_BASE_URL}/sessions/recordings/${recordingId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.delete(`/sessions/recordings/${recordingId}`);
     return response.data;
   }
 
   // Attendance Management
   async getSessionAttendance(sessionId: string): Promise<{ success: boolean; data: { attendance: any[] } }> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/${sessionId}/attendance`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.get(`/sessions/${sessionId}/attendance`);
     return response.data;
   }
 
   async markAttendance(sessionId: string): Promise<{ success: boolean }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/attendance`, {}, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post(`/sessions/${sessionId}/attendance`, {});
     return response.data;
   }
 
@@ -193,41 +198,26 @@ class SessionService {
     duration: number;
     timezone?: string;
   }): Promise<{ success: boolean; data: { meetingId: string; joinUrl: string; password?: string } }> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/zoom/create`, sessionData, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.post('/sessions/zoom/create', sessionData);
     return response.data;
   }
 
   async updateZoomMeeting(meetingId: string, updateData: any): Promise<{ success: boolean }> {
-    const response = await axios.put(`${API_BASE_URL}/sessions/zoom/${meetingId}`, updateData, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.put(`/sessions/zoom/${meetingId}`, updateData);
     return response.data;
   }
 
   async deleteZoomMeeting(meetingId: string): Promise<{ success: boolean }> {
-    const response = await axios.delete(`${API_BASE_URL}/sessions/zoom/${meetingId}`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.delete(`/sessions/zoom/${meetingId}`);
     return response.data;
   }
 
   async getZoomRecordings(meetingId: string): Promise<{ success: boolean; data: { recordings: any[] } }> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/zoom/${meetingId}/recordings`, {
-      headers: this.getAuthHeaders()
-    });
+    const response = await sessionAxios.get(`/sessions/zoom/${meetingId}/recordings`);
     return response.data;
   }
 
-  // Utility Methods
-  private getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-  }
+
 
   // Helper method to format session time
   formatSessionTime(scheduledAt: string, duration: number): { startTime: string; endTime: string } {

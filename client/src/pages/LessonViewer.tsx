@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
+import adminService from "@/services/adminService";
 
 interface LessonFile {
   _id: string;
@@ -75,6 +76,7 @@ const LessonViewer = () => {
   const [navHeight, setNavHeight] = useState(0);
 
   const isInstructor = user?.role === 'instructor';
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     const fetchCourseAndLesson = async () => {
@@ -82,9 +84,14 @@ const LessonViewer = () => {
       
       try {
         setLoading(true);
-        const response = isInstructor 
-          ? await instructorService.getCourseDetail(courseId)
-          : await courseService.getCourseDetail(courseId);
+        let response;
+        if (isAdmin) {
+          response = await adminService.getCourseById(courseId);
+        } else if (isInstructor) {
+          response = await instructorService.getCourseDetail(courseId);
+        } else {
+          response = await courseService.getCourseDetail(courseId);
+        }
         
         setCourse(response.data.course);
         
@@ -110,7 +117,7 @@ const LessonViewer = () => {
     };
 
     fetchCourseAndLesson();
-  }, [courseId, lessonId, isInstructor, navigate]);
+  }, [courseId, lessonId, isInstructor, isAdmin, navigate]);
 
   // Load notes when lesson changes
   useEffect(() => {

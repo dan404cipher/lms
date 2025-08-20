@@ -7,6 +7,15 @@ const authAxios = axios.create({
   baseURL: API_URL
 });
 
+// Add request interceptor to include auth token
+authAxios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Add response interceptor to handle token refresh
 authAxios.interceptors.response.use(
   (response) => response,
@@ -70,6 +79,7 @@ export interface AuthResponse {
       email: string;
       role: string;
       credits: number;
+      profile?: any;
     };
     token: string;
     refreshToken: string;
@@ -95,17 +105,8 @@ class AuthService {
   }
 
   async getProfile(): Promise<any> {
-    const response = await authAxios.get('/auth/profile', {
-      headers: this.getAuthHeaders()
-    });
+    const response = await authAxios.get('/auth/profile');
     return response.data;
-  }
-
-  private getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-      Authorization: `Bearer ${token}`
-    };
   }
 }
 

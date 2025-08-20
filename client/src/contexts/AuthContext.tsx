@@ -29,30 +29,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(null);
           }
         })
-        .catch(async (error) => {
+        .catch((error) => {
           console.log('Profile fetch failed:', error.response?.status);
-          
-          // If token is expired, try to refresh
-          if (error.response?.status === 401) {
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (refreshToken) {
-              try {
-                const refreshResponse = await authService.refreshToken(refreshToken);
-                if (refreshResponse.success) {
-                  localStorage.setItem('token', refreshResponse.data.token);
-                  localStorage.setItem('refreshToken', refreshResponse.data.refreshToken);
-                  setUser(refreshResponse.data.user);
-                  return;
-                }
-              } catch (refreshError) {
-                console.log('Token refresh failed:', refreshError);
-              }
-            }
-          }
-          
-          // Clear invalid tokens
-          localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
+          console.log('Profile fetch error:', error);
+          // Let the service layer handle authentication errors
+          // The service will automatically redirect to login if needed
           setUser(null);
         })
         .finally(() => {

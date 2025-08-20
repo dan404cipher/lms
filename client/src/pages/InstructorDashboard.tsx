@@ -70,12 +70,12 @@ const InstructorDashboard = () => {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Redirect non-instructors to student dashboard
+  // Redirect non-instructors and non-admins to student dashboard
   useEffect(() => {
-    if (user && user.role !== 'instructor') {
+    if (user && user.role && !['instructor', 'admin', 'super_admin'].includes(user.role)) {
       navigate('/dashboard');
     }
-  }, [user, navigate]);
+  }, [user?.role, navigate]);
 
   useEffect(() => {
     const fetchInstructorData = async () => {

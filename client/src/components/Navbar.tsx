@@ -50,15 +50,27 @@ const Navbar = memo(() => {
                   whileTap={{ scale: 0.95 }}
                 >
                   <Link 
-                    to={user.role === 'instructor' ? "/instructor/dashboard" : "/dashboard"} 
+                    to={
+                      user.role === 'instructor' ? "/instructor/dashboard" : 
+                      user.role === 'admin' || user.role === 'super_admin' ? "/admin/dashboard" : 
+                      "/dashboard"
+                    } 
                     className={`text-foreground hover:text-primary transition-all duration-200 font-medium flex items-center space-x-2 ${
-                      location.pathname === (user.role === 'instructor' ? "/instructor/dashboard" : "/dashboard") 
+                      location.pathname === (
+                        user.role === 'instructor' ? "/instructor/dashboard" : 
+                        user.role === 'admin' || user.role === 'super_admin' ? "/admin/dashboard" : 
+                        "/dashboard"
+                      ) 
                         ? 'text-primary' 
                         : ''
                     }`}
                   >
                     <LayoutDashboard className="h-4 w-4" />
-                    <span>{user.role === 'instructor' ? 'Instructor Dashboard' : 'Dashboard'}</span>
+                    <span>{
+                      user.role === 'instructor' ? 'Instructor Dashboard' : 
+                      user.role === 'admin' || user.role === 'super_admin' ? 'Admin Dashboard' : 
+                      'Dashboard'
+                    }</span>
                   </Link>
                 </motion.div>
                 <motion.div

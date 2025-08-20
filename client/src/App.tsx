@@ -7,11 +7,12 @@ import { AuthProvider } from "./contexts/AuthContext";
 import Navbar from "./components/Navbar";
 import PageTransition from "./components/PageTransition";
 import Layout from "./components/Layout";
-import GlobalMessaging from "./components/messages/GlobalMessaging";
+
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import InstructorDashboard from "./pages/InstructorDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import Courses from "./pages/Courses";
 import UnifiedCourseDetail from "./pages/UnifiedCourseDetail";
 import LessonViewer from "./pages/LessonViewer";
@@ -43,11 +44,14 @@ const App = () => (
                 <Route path="/instructor/dashboard" element={<Layout><InstructorDashboard /></Layout>} />
                 <Route path="/instructor/courses/:courseId" element={<Layout><UnifiedCourseDetail /></Layout>} />
                 
+                {/* Admin Routes */}
+                <Route path="/admin/dashboard" element={<Layout><AdminDashboard /></Layout>} />
+                
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<Layout><NotFound /></Layout>} />
               </Routes>
             </PageTransition>
-            <GlobalMessaging />
+
           </div>
         </BrowserRouter>
       </TooltipProvider>

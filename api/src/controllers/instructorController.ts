@@ -8,6 +8,7 @@ import { Material } from '../models/Material';
 import { Announcement } from '../models/Announcement';
 import { Enrollment } from '../models/Enrollment';
 import { User } from '../models/User';
+import { uploadFileLocally } from '../utils/fileUpload';
 import mongoose from 'mongoose';
 
 interface AuthRequest extends Request {
@@ -599,19 +600,29 @@ export const uploadMaterial = async (req: AuthRequest, res: Response, next: Next
       });
     }
 
-    const { title, description, type, fileUrl, fileName, fileSize, mimeType, isPublished } = req.body;
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    // Upload file locally
+    const uploadResult = await uploadFileLocally(req.file, 'materials');
+    
+    const { title, description, type } = req.body;
 
     const material = new Material({
       courseId,
       instructorId: userId,
-      title,
-      description,
+      title: title || req.file.originalname,
+      description: description || `Uploaded material: ${req.file.originalname}`,
       type: type || 'document',
-      fileUrl,
-      fileName,
-      fileSize,
-      mimeType,
-      isPublished: isPublished || false
+      fileUrl: uploadResult.Location,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      isPublished: true
     });
 
     await material.save();

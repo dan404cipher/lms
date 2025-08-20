@@ -213,6 +213,14 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     res.json({
       success: true,
       data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          credits: user.credits,
+          profile: user.profile
+        },
         token: newToken,
         refreshToken: newRefreshToken
       }

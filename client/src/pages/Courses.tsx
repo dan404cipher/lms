@@ -4,10 +4,17 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, Loader2 } from "lucide-react";
 
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
+import adminService from "@/services/adminService";
 
 
 interface Course {
@@ -37,8 +44,24 @@ interface Course {
 const Courses = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [instructors, setInstructors] = useState<any[]>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    shortDescription: '',
+    categoryId: '',
+    instructorId: '',
+    courseCode: '',
+    priceCredits: 0,
+    difficulty: 'beginner',
+    duration: 0
+  });
 
   const getCourseIcon = (title: string, iconColor?: string) => {
     // Generate a consistent icon based on course title
@@ -99,7 +122,7 @@ const Courses = () => {
     
     const colorIndex = Math.abs(hash) % 6;
     
-    // Different color schemes for students vs instructors
+    // Different color schemes for different user roles
     const studentColors = [
       'bg-blue-500',      // Blue
       'bg-green-500',     // Green
@@ -117,8 +140,23 @@ const Courses = () => {
       'bg-violet-500',    // Violet
       'bg-fuchsia-500'    // Fuchsia
     ];
+
+    const adminColors = [
+      'bg-red-500',       // Red
+      'bg-amber-500',     // Amber
+      'bg-lime-500',      // Lime
+      'bg-sky-500',       // Sky
+      'bg-blue-600',      // Dark Blue
+      'bg-green-600'      // Dark Green
+    ];
     
-    return user?.role === 'instructor' ? instructorColors[colorIndex] : studentColors[colorIndex];
+    if (user?.role === 'admin') {
+      return adminColors[colorIndex];
+    } else if (user?.role === 'instructor') {
+      return instructorColors[colorIndex];
+    } else {
+      return studentColors[colorIndex];
+    }
   };
 
 
@@ -129,15 +167,22 @@ const Courses = () => {
         setLoading(true);
         let response;
         
-        if (user?.role === 'instructor') {
+        if (user?.role === 'admin') {
+          // For admins, get all courses in the system
+          response = await adminService.getAllCourses();
+          console.log('Admin courses response:', response);
+          setCourses(response.data.courses || []);
+        } else if (user?.role === 'instructor') {
           // For instructors, get courses they are assigned to teach
           response = await instructorService.getMyCourses();
+          console.log('Instructor courses response:', response);
+          setCourses(response.data.courses || []);
         } else {
           // For learners, get courses they are enrolled in
           response = await courseService.getMyCourses();
+          console.log('Learner courses response:', response);
+          setCourses(response.data.courses || []);
         }
-        
-        setCourses(response.data.courses);
       } catch (error) {
         console.error('Error fetching courses:', error);
         // Fallback to empty array if API fails
@@ -149,6 +194,81 @@ const Courses = () => {
 
     fetchCourses();
   }, [user?.role]);
+
+  // Load categories and instructors for course creation
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      loadCategoriesAndInstructors();
+    }
+  }, [user?.role]);
+
+  const loadCategoriesAndInstructors = async () => {
+    try {
+      // Load categories and instructors for the create course form
+      // You might need to add these endpoints to your admin service
+      const [categoriesResponse, instructorsResponse] = await Promise.all([
+        adminService.getCategories?.() || Promise.resolve({ data: { categories: [] } }),
+        adminService.getAllUsers?.() || Promise.resolve({ data: { users: [] } })
+      ]);
+      
+      setCategories(categoriesResponse.data?.categories || []);
+      setInstructors(instructorsResponse.data?.users?.filter((user: any) => user.role === 'instructor') || []);
+    } catch (error) {
+      console.error('Error loading categories and instructors:', error);
+    }
+  };
+
+  const handleCreateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.title || !formData.description || !formData.categoryId || !formData.instructorId) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      const response = await adminService.createCourse(formData);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: "Course created successfully!"
+        });
+        setShowCreateModal(false);
+        setFormData({
+          title: '',
+          description: '',
+          shortDescription: '',
+          categoryId: '',
+          instructorId: '',
+          courseCode: '',
+          priceCredits: 0,
+          difficulty: 'beginner',
+          duration: 0
+        });
+        // Refresh courses list
+        fetchCourses();
+      }
+    } catch (error: any) {
+      console.error('Error creating course:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create course. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   if (loading) {
     return (
@@ -163,55 +283,241 @@ const Courses = () => {
 
   return (
     <div className="container mx-auto">
-        <div className="mb-3">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-foreground">
-              {user?.role === 'instructor' ? 'My Teaching Courses' : 'Active Courses'}
-            </h1>
+      <div className="mb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-foreground">
+            {user?.role === 'admin' ? 'All Courses' : user?.role === 'instructor' ? 'My Teaching Courses' : 'Active Courses'}
+          </h1>
+          
+          {user?.role === 'admin' && (
+            <Button onClick={() => setShowCreateModal(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Course
+            </Button>
+          )}
+        </div>
+      </div>
 
+      {courses.length === 0 ? (
+        <div className="col-span-full text-center py-8">
+          <div className="text-muted-foreground">
+            <p className="text-lg font-medium">No courses found</p>
+            <p className="text-sm mt-2">
+              {user?.role === 'admin' 
+                ? 'There are no courses in the system yet.' 
+                : user?.role === 'instructor' 
+                ? 'You are not assigned to any courses yet.' 
+                : 'No courses are available for you yet.'}
+            </p>
           </div>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {courses.map((course) => (
+            <Card 
+              key={course._id} 
+              className="hover:shadow-md transition-all duration-200 cursor-pointer border-0 shadow-sm"
+              onClick={() => navigate(`/courses/${course._id}`)}
+            >
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Icon */}
+                  <div className={`w-10 h-10 rounded-lg ${getCourseColor(course.title)} flex items-center justify-center text-white flex-shrink-0`}>
+                    {getCourseIcon(course.title, course.iconColor)}
+                  </div>
+                  
+                  {/* Course Title */}
+                  <div>
+                    <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-tight">
+                      {course.title}
+                    </h3>
+                  </div>
+                  
+                  {/* Progress Bar - Only show for non-admin users */}
+                  {user?.role !== 'admin' && (
+                    <div className="space-y-1">
+                      <div className="w-full bg-muted rounded-full h-1">
+                        <div 
+                          className={`h-1 rounded-full ${(course.progress || 0) > 0 ? 'bg-foreground' : 'bg-muted-foreground/20'}`}
+                          style={{ width: `${course.progress || 0}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {course.progress || 0}% complete
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Course Stats for Admin */}
+                  {user?.role === 'admin' && course.stats && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">
+                        {course.stats.enrollments} enrollments • {course.stats.averageRating?.toFixed(1) || 'N/A'} rating
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {courses.map((course) => (
-          <Card 
-            key={course._id} 
-            className="hover:shadow-md transition-all duration-200 cursor-pointer border-0 shadow-sm"
-            onClick={() => navigate(`/courses/${course._id}`)}
-          >
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                {/* Icon */}
-                <div className={`w-10 h-10 rounded-lg ${getCourseColor(course.title)} flex items-center justify-center text-white flex-shrink-0`}>
-                  {getCourseIcon(course.title, course.iconColor)}
-                </div>
-                
-                {/* Course Title */}
-                <div>
-                  <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-tight">
-                    {course.title}
-                  </h3>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="space-y-1">
-                  <div className="w-full bg-muted rounded-full h-1">
-                    <div 
-                      className={`h-1 rounded-full ${(course.progress || 0) > 0 ? 'bg-foreground' : 'bg-muted-foreground/20'}`}
-                      style={{ width: `${course.progress || 0}%` }}
-                    ></div>
+      {/* Create Course Modal */}
+          <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Course</DialogTitle>
+                <DialogDescription>
+                  Fill in the details below to create a new course.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <form onSubmit={handleCreateCourse} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="title">Course Title *</Label>
+                    <Input
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => handleInputChange('title', e.target.value)}
+                      placeholder="Enter course title"
+                      required
+                    />
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {course.progress || 0}% complete
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="courseCode">Course Code</Label>
+                    <Input
+                      id="courseCode"
+                      value={formData.courseCode}
+                      onChange={(e) => handleInputChange('courseCode', e.target.value)}
+                      placeholder="e.g., CS101"
+                    />
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-};
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description *</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => handleInputChange('description', e.target.value)}
+                    placeholder="Enter course description"
+                    rows={3}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="shortDescription">Short Description</Label>
+                  <Input
+                    id="shortDescription"
+                    value={formData.shortDescription}
+                    onChange={(e) => handleInputChange('shortDescription', e.target.value)}
+                    placeholder="Brief course overview"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category *</Label>
+                    <Select value={formData.categoryId} onValueChange={(value) => handleInputChange('categoryId', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category._id} value={category._id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="instructor">Instructor *</Label>
+                    <Select value={formData.instructorId} onValueChange={(value) => handleInputChange('instructorId', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select instructor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {instructors.map((instructor) => (
+                          <SelectItem key={instructor._id} value={instructor._id}>
+                            {instructor.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="difficulty">Difficulty</Label>
+                    <Select value={formData.difficulty} onValueChange={(value) => handleInputChange('difficulty', value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="beginner">Beginner</SelectItem>
+                        <SelectItem value="intermediate">Intermediate</SelectItem>
+                        <SelectItem value="advanced">Advanced</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="duration">Duration (hours)</Label>
+                    <Input
+                      id="duration"
+                      type="number"
+                      value={formData.duration}
+                      onChange={(e) => handleInputChange('duration', parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="priceCredits">Price (Credits)</Label>
+                    <Input
+                      id="priceCredits"
+                      type="number"
+                      value={formData.priceCredits}
+                      onChange={(e) => handleInputChange('priceCredits', parseInt(e.target.value) || 0)}
+                      placeholder="0"
+                      min="0"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowCreateModal(false)}
+                    disabled={isCreating}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isCreating}>
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Course'
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      );
+    };
 
 export default Courses;

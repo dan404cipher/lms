@@ -57,12 +57,16 @@ const Dashboard = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Redirect instructors to their dashboard
+  // Redirect instructors and admins to their dashboard
   useEffect(() => {
-    if (user && user.role === 'instructor') {
-      navigate('/instructor/dashboard');
+    if (user && user.role) {
+      if (user.role === 'instructor') {
+        navigate('/instructor/dashboard');
+      } else if (user.role === 'admin' || user.role === 'super_admin') {
+        navigate('/admin/dashboard');
+      }
     }
-  }, [user, navigate]);
+  }, [user?.role, navigate]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {

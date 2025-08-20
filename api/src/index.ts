@@ -30,13 +30,14 @@ import authRoutes from './routes/auth';
 import courseRoutes from './routes/courses';
 import userRoutes from './routes/users';
 import sessionRoutes from './routes/sessions';
-import enrollmentRoutes from './routes/enrollments';
+
 import chatRoutes from './routes/chat';
 import connectionRoutes from './routes/connections';
 import uploadRoutes from './routes/upload';
 import notificationRoutes from './routes/notifications';
 import instructorRoutes from './routes/instructor';
 import recordingRoutes from './routes/recordings';
+import adminRoutes from './routes/admin';
 import { setupSocketIO } from './config/socket';
 
 const app = express();
@@ -90,13 +91,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
-app.use('/api/enrollments', enrollmentRoutes);
+
 app.use('/api/chat', chatRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/instructor', instructorRoutes);
 app.use('/api/recordings', recordingRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve uploaded files with CORS headers
 app.use('/uploads', (req, res, next) => {

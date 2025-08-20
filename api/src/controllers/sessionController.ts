@@ -109,6 +109,22 @@ export const getSessions = async (req: AuthRequest, res: Response, next: NextFun
     // Filter by course
     if (req.query.courseId) {
       query.courseId = req.query.courseId;
+      
+      // For students, check if they're enrolled in the course
+      if (!['instructor', 'admin', 'super_admin'].includes(req.user.role)) {
+        const enrollment = await Enrollment.findOne({
+          userId: req.user._id,
+          courseId: req.query.courseId,
+          status: { $in: ['active', 'completed'] }
+        });
+        
+        if (!enrollment) {
+          return res.status(403).json({
+            success: false,
+            message: 'You must be enrolled in this course to view sessions'
+          });
+        }
+      }
     }
 
     // Filter by instructor

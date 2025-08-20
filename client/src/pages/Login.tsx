@@ -25,6 +25,8 @@ const Login = () => {
     if (user) {
       if (user.role === 'instructor') {
         navigate("/instructor/dashboard");
+      } else if (user.role === 'admin' || user.role === 'super_admin') {
+        navigate("/admin/dashboard"); // Admin uses dedicated admin dashboard
       } else {
         navigate("/dashboard");
       }
