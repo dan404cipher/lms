@@ -165,6 +165,7 @@ const Courses = () => {
     const fetchCourses = async () => {
       try {
         setLoading(true);
+        console.log('fetchCourses - User role:', user?.role, 'User ID:', user?._id);
         let response;
         
         if (user?.role === 'admin') {
@@ -193,7 +194,7 @@ const Courses = () => {
     };
 
     fetchCourses();
-  }, [user?.role]);
+  }, [user?.role, user?._id]);
 
   // Load categories and instructors for course creation
   useEffect(() => {

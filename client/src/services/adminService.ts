@@ -204,12 +204,29 @@ class AdminService {
     email: string;
     password: string;
     role: string;
+    status: string;
+    credits: number;
+    bio?: string;
+    location?: string;
+    phone?: string;
+    website?: string;
   }): Promise<AdminResponse<User>> {
     const response = await adminAxios.post('/admin/users', userData);
     return response.data;
   }
 
-  async updateUser(userId: string, userData: Partial<User>): Promise<AdminResponse<User>> {
+  async updateUser(userId: string, userData: Partial<{
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    status: string;
+    credits: number;
+    bio: string;
+    location: string;
+    phone: string;
+    website: string;
+  }>): Promise<AdminResponse<User>> {
     const response = await adminAxios.put(`/admin/users/${userId}`, userData);
     return response.data;
   }

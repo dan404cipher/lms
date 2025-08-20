@@ -8,6 +8,7 @@ import {
   updateUserRole,
   getUserEnrollments,
   getUserCourses,
+  getEnrolledCourses,
   getUserAnalytics,
   searchUsers
 } from '../controllers/userController';
@@ -45,6 +46,7 @@ router.get('/profile', getUser);
 router.put('/profile', updateUserValidation, updateUser);
 router.get('/enrollments', getUserEnrollments);
 router.get('/courses', getUserCourses);
+router.get('/enrolled-courses', getEnrolledCourses);
 router.get('/analytics', getUserAnalytics);
 router.get('/search', searchUsers);
 

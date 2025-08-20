@@ -21,7 +21,6 @@ import {
   Video,
   CheckCircle,
   ArrowRight,
-  Bell,
   BarChart3,
   Plus,
   Edit,
@@ -256,8 +255,6 @@ const UnifiedCourseDetail = () => {
         return { text: 'Upload Material', action: 'material' };
       case 'sessions':
         return { text: 'Schedule Session', action: 'session' };
-      case 'announcements':
-        return { text: 'New Announcement', action: 'announcement' };
       default:
         return { text: 'Add Module', action: 'module' };
     }
@@ -790,12 +787,11 @@ const UnifiedCourseDetail = () => {
         setActiveTab(tab);
         localStorage.setItem(`courseTab_${courseId}`, tab);
       }} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          {(isInstructor || isAdmin) && <TabsTrigger value="announcements">Announcements</TabsTrigger>}
           {isAdmin && <TabsTrigger value="batch">Batch</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
         </TabsList>
@@ -1204,44 +1200,7 @@ const UnifiedCourseDetail = () => {
           )}
         </TabsContent>
 
-        {/* Announcements Tab - Instructor and Admin */}
-        {(isInstructor || isAdmin) && (
-          <TabsContent value="announcements" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Bell className="h-5 w-5" />
-                  <span>Announcements</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {course.announcements && Array.isArray(course.announcements) && course.announcements.length > 0 ? (
-                  <div className="space-y-3">
-                    {course.announcements.map((announcement) => (
-                      <div key={announcement._id} className="p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="font-medium">{announcement.title}</p>
-                          <Badge variant={announcement.isPublished ? "default" : "secondary"}>
-                            {announcement.isPublished ? 'Published' : 'Draft'}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{announcement.content}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(announcement.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No announcements yet</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
+
 
         {/* Batch Tab - Admin Only */}
         {isAdmin && (

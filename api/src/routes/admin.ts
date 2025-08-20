@@ -49,14 +49,25 @@ const userValidation = [
   body('name').trim().isLength({ min: 2, max: 50 }).withMessage('Name must be between 2 and 50 characters'),
   body('email').isEmail().normalizeEmail().withMessage('Please enter a valid email'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['learner', 'instructor', 'admin']).withMessage('Invalid role')
+  body('role').isIn(['learner', 'instructor', 'admin', 'super_admin']).withMessage('Invalid role'),
+  body('status').optional().isIn(['active', 'inactive', 'suspended']).withMessage('Invalid status'),
+  body('credits').optional().isInt({ min: 0 }).withMessage('Credits must be a non-negative integer'),
+  body('bio').optional().trim().isLength({ max: 500 }).withMessage('Bio cannot exceed 500 characters'),
+  body('location').optional().trim().isLength({ max: 100 }).withMessage('Location cannot exceed 100 characters'),
+  body('phone').optional().trim().isLength({ max: 20 }).withMessage('Phone cannot exceed 20 characters'),
+  body('website').optional().trim().isURL().withMessage('Please enter a valid website URL')
 ];
 
 const updateUserValidation = [
   body('name').optional().trim().isLength({ min: 2, max: 50 }).withMessage('Name must be between 2 and 50 characters'),
   body('email').optional().isEmail().normalizeEmail().withMessage('Please enter a valid email'),
-  body('role').optional().isIn(['learner', 'instructor', 'admin']).withMessage('Invalid role'),
-  body('isActive').optional().isBoolean().withMessage('isActive must be a boolean')
+  body('role').optional().isIn(['learner', 'instructor', 'admin', 'super_admin']).withMessage('Invalid role'),
+  body('status').optional().isIn(['active', 'inactive', 'suspended']).withMessage('Invalid status'),
+  body('credits').optional().isInt({ min: 0 }).withMessage('Credits must be a non-negative integer'),
+  body('bio').optional().trim().isLength({ max: 500 }).withMessage('Bio cannot exceed 500 characters'),
+  body('location').optional().trim().isLength({ max: 100 }).withMessage('Location cannot exceed 100 characters'),
+  body('phone').optional().trim().isLength({ max: 20 }).withMessage('Phone cannot exceed 20 characters'),
+  body('website').optional().trim().isURL().withMessage('Please enter a valid website URL')
 ];
 
 const courseStatusValidation = [

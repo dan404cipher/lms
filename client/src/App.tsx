@@ -17,6 +17,7 @@ import Courses from "./pages/Courses";
 import UnifiedCourseDetail from "./pages/UnifiedCourseDetail";
 import LessonViewer from "./pages/LessonViewer";
 import Activity from "./pages/Activity";
+import UserManagement from "./pages/UserManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +47,7 @@ const App = () => (
                 
                 {/* Admin Routes */}
                 <Route path="/admin/dashboard" element={<Layout><AdminDashboard /></Layout>} />
+                <Route path="/admin/users" element={<Layout><UserManagement /></Layout>} />
                 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<Layout><NotFound /></Layout>} />

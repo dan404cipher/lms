@@ -108,7 +108,7 @@ export const createUser = async (req: AuthRequest, res: Response, next: NextFunc
       });
     }
 
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, status, credits, bio, location, phone, website } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -123,7 +123,15 @@ export const createUser = async (req: AuthRequest, res: Response, next: NextFunc
       name,
       email,
       password,
-      role: role || 'learner'
+      role: role || 'learner',
+      status: status || 'active',
+      credits: credits || 0,
+      profile: {
+        bio: bio || '',
+        location: location || '',
+        phone: phone || '',
+        website: website || ''
+      }
     });
 
     await user.save();
@@ -160,11 +168,24 @@ export const updateUser = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     // Update user fields
-    Object.keys(req.body).forEach(key => {
-      if (key !== 'password') {
-        (user as any)[key] = req.body[key];
-      }
-    });
+    const { name, email, role, status, credits, bio, location, phone, website } = req.body;
+    
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (role) user.role = role;
+    if (status) user.status = status;
+    if (credits !== undefined) user.credits = credits;
+    
+    // Update profile fields
+    if (bio !== undefined || location !== undefined || phone !== undefined || website !== undefined) {
+      user.profile = {
+        ...user.profile,
+        bio: bio !== undefined ? bio : user.profile?.bio || '',
+        location: location !== undefined ? location : user.profile?.location || '',
+        phone: phone !== undefined ? phone : user.profile?.phone || '',
+        website: website !== undefined ? website : user.profile?.website || ''
+      };
+    }
 
     // Handle password update separately
     if (req.body.password) {

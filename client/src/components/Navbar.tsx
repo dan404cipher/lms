@@ -2,7 +2,16 @@ import { useState, memo } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { BookOpen, User, Menu, X, Search, LogOut, LayoutDashboard, GraduationCap, Activity } from "lucide-react";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BookOpen, User, Menu, X, Search, LogOut, LayoutDashboard, GraduationCap, Activity, Users, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 
@@ -101,6 +110,22 @@ const Navbar = memo(() => {
                     <span>Activity</span>
                   </Link>
                 </motion.div>
+                {(user.role === 'admin' || user.role === 'super_admin') && (
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Link 
+                      to="/admin/users" 
+                      className={`text-foreground hover:text-primary transition-all duration-200 font-medium flex items-center space-x-2 ${
+                        location.pathname === '/admin/users' ? 'text-primary' : ''
+                      }`}
+                    >
+                      <Users className="h-4 w-4" />
+                      <span>Users</span>
+                    </Link>
+                  </motion.div>
+                )}
               </>
             ) : (
               <>
@@ -146,24 +171,54 @@ const Navbar = memo(() => {
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
             {user ? (
-              <>
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => { 
-                      logout(); 
-                      setTimeout(() => navigate("/"), 100); 
-                    }}
-                    className="transition-all duration-200"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Logout
-                  </Button>
-                </motion.div>
-              </>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={user.profile?.avatar} alt={user.name} />
+                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                          {user.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">{user.name}</p>
+                        <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                        <p className="text-xs leading-none text-muted-foreground capitalize">
+                          {user.role.replace('_', ' ')}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/profile")}>
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Profile</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/settings")}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Settings</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={() => { 
+                        logout(); 
+                        setTimeout(() => navigate("/"), 100); 
+                      }}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Log out</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </motion.div>
             ) : (
               <>
                 <motion.div
@@ -213,6 +268,25 @@ const Navbar = memo(() => {
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden py-4 space-y-4 border-t border-border animate-fade-in">
+            {user && (
+              <div className="px-3 py-2 border-b border-border">
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={user.profile?.avatar} alt={user.name} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                      {user.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {user.role.replace('_', ' ')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex space-x-2">
               <Search className="h-4 w-4 text-muted-foreground mt-3 ml-3" />
               <Input
@@ -232,6 +306,11 @@ const Navbar = memo(() => {
                   <Link to="/activity" className="block px-3 py-2 text-foreground hover:text-primary transition-colors">
                     Activity
                   </Link>
+                  {(user.role === 'admin' || user.role === 'super_admin') && (
+                    <Link to="/admin/users" className="block px-3 py-2 text-foreground hover:text-primary transition-colors">
+                      Users
+                    </Link>
+                  )}
                 </>
               ) : (
                 <>
@@ -250,7 +329,15 @@ const Navbar = memo(() => {
             <div className="flex flex-col space-y-2 px-3">
               {user ? (
                 <>
-                  <Button variant="ghost" className="justify-start" onClick={() => { logout(); navigate("/"); }}>
+                  <Button variant="ghost" className="justify-start" onClick={() => navigate("/profile")}>
+                    <User className="h-4 w-4 mr-2" />
+                    Profile
+                  </Button>
+                  <Button variant="ghost" className="justify-start" onClick={() => navigate("/settings")}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Button>
+                  <Button variant="ghost" className="justify-start text-red-600 hover:text-red-700" onClick={() => { logout(); navigate("/"); }}>
                     <LogOut className="h-4 w-4 mr-2" />
                     Logout
                   </Button>

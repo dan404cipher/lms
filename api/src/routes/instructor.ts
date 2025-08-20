@@ -35,7 +35,7 @@ const router = express.Router();
 
 // Apply authentication and authorization middleware to all routes
 router.use(protect);
-router.use(authorize('instructor'));
+router.use(authorize('instructor', 'admin', 'super_admin'));
 
 // Dashboard
 router.get('/dashboard/stats', getDashboardStats);

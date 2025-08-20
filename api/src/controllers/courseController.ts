@@ -14,13 +14,32 @@ interface AuthRequest extends Request {
 // @desc    Get all courses
 // @route   GET /api/courses
 // @access  Public
-export const getCourses = async (req: Request, res: Response, next: NextFunction) => {
+export const getCourses = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
 
     const query: any = { published: true };
+    
+    // If user is authenticated, filter based on their role and enrollment
+    if (req.user) {
+      const userId = req.user._id;
+      const userRole = req.user.role;
+      
+      // Admins can see all courses
+      if (['admin', 'super_admin'].includes(userRole)) {
+        // No additional filtering needed for admins
+      } else if (userRole === 'instructor') {
+        // Instructors can see courses they teach
+        query.instructorId = userId;
+      } else {
+        // Learners can only see courses they are enrolled in
+        const userEnrollments = await mongoose.model('Enrollment').find({ userId });
+        const enrolledCourseIds = userEnrollments.map(e => e.courseId);
+        query._id = { $in: enrolledCourseIds };
+      }
+    }
 
     // Filter by category
     if (req.query.category) {

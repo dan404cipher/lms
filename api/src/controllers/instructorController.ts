@@ -18,24 +18,102 @@ interface AuthRequest extends Request {
 // Get instructor's courses
 export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // In development, show all courses to instructors for testing
+    console.log('getMyCourses - User ID:', req.user._id, 'Role:', req.user.role);
+    
+    // Check if user is admin (admins can see all courses)
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    console.log('getMyCourses - Is Admin:', isAdmin);
+    
+    // Fix existing courses where instructor is assigned but not enrolled
+    if (!isAdmin && req.user.role === 'instructor') {
+      const assignedCourses = await Course.find({ instructorId: req.user._id });
+      for (const course of assignedCourses) {
+        const existingEnrollment = await Enrollment.findOne({ 
+          userId: req.user._id, 
+          courseId: course._id 
+        });
+        
+        if (!existingEnrollment) {
+          console.log('getMyCourses - Auto-enrolling instructor in existing course:', course.title);
+          const newEnrollment = new Enrollment({
+            userId: req.user._id,
+            courseId: course._id,
+            status: 'active',
+            creditsPaid: course.priceCredits || 0,
+            progress: {
+              completedLessons: [],
+              currentLesson: null,
+              completionPercentage: 0,
+              timeSpent: 0,
+              lastAccessedAt: new Date()
+            }
+          });
+          await newEnrollment.save();
+        }
+      }
+    }
+    
     let courses;
-    if (process.env.NODE_ENV === 'development') {
+    if (isAdmin) {
+      // Admins can see all courses
+      console.log('getMyCourses - Fetching all courses for admin');
       courses = await Course.find({})
         .populate('categoryId', 'name')
         .populate('instructorId', 'name')
         .sort({ createdAt: -1 });
     } else {
+      // Instructors can only see courses they teach
+      console.log('getMyCourses - Fetching courses for instructor ID:', req.user._id);
+      
+      // First, let's see all courses in the database to debug
+      const allCourses = await Course.find({})
+        .populate('categoryId', 'name')
+        .populate('instructorId', 'name')
+        .sort({ createdAt: -1 });
+      
+      console.log('getMyCourses - All courses in database:');
+      allCourses.forEach(course => {
+        console.log('  Course:', course.title, 'Instructor ID:', course.instructorId._id, 'Instructor Name:', (course.instructorId as any)?.name);
+      });
+      
+      // Now get courses assigned to this instructor
       courses = await Course.find({ instructorId: req.user._id })
         .populate('categoryId', 'name')
+        .populate('instructorId', 'name')
         .sort({ createdAt: -1 });
+      
+      console.log('getMyCourses - Courses assigned to instructor:', req.user._id);
+      courses.forEach(course => {
+        console.log('  Assigned Course:', course.title, 'Instructor ID:', course.instructorId._id, 'Instructor Name:', (course.instructorId as any)?.name);
+      });
+      
+      // Double-check that all returned courses are actually assigned to this instructor
+      courses = courses.filter(course => {
+        const isAssigned = course.instructorId._id.toString() === req.user._id.toString();
+        if (!isAssigned) {
+          console.log('getMyCourses - Filtering out course:', course.title, 'Instructor:', (course.instructorId as any)?.name);
+        }
+        return isAssigned;
+      });
     }
+    
+    console.log('getMyCourses - Found courses:', courses.length);
+    courses.forEach(course => {
+      console.log('Course:', course.title, 'Instructor:', (course.instructorId as any)?.name);
+    });
 
     const coursesWithStats = await Promise.all(
       courses.map(async (course) => {
         const enrollments = await Enrollment.find({ courseId: course._id });
         const totalEnrollments = enrollments.length;
         const completedEnrollments = enrollments.filter(e => e.progress.completionPercentage === 100).length;
+        
+        // Check if instructor is enrolled in this course
+        const instructorEnrollment = await Enrollment.findOne({ 
+          userId: req.user._id, 
+          courseId: course._id 
+        });
+        console.log('getMyCourses - Course:', course.title, 'Instructor enrolled:', !!instructorEnrollment);
         
         // Calculate average rating (mock for now)
         const averageRating = 4.2;
@@ -47,7 +125,7 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
           description: course.description,
           category: { name: (course.categoryId as any)?.name || 'Uncategorized' },
           courseCode: course.courseCode,
-          instructor: process.env.NODE_ENV === 'development' ? { name: (course.instructorId as any)?.name || 'Unknown' } : undefined,
+          instructor: { name: (course.instructorId as any)?.name || 'Unknown' },
           stats: {
             enrollments: totalEnrollments,
             completions: completedEnrollments,
@@ -55,16 +133,19 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
             totalRatings
           },
           published: course.published,
-          createdAt: course.createdAt
+          createdAt: course.createdAt,
+          instructorEnrolled: !!instructorEnrollment
         };
       })
     );
 
+    console.log('getMyCourses - Returning courses:', coursesWithStats.length);
     res.json({
       success: true,
       data: { courses: coursesWithStats }
     });
   } catch (error) {
+    console.error('getMyCourses - Error:', error);
     next(error);
   }
 };
@@ -75,22 +156,65 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
     const courseId = req.params.courseId;
     const userId = req.user._id;
 
-    // In development, allow instructors to access any course for testing
+    // Check if user is admin (admins can access any course)
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    
     let course;
-    if (process.env.NODE_ENV === 'development') {
+    if (isAdmin) {
+      // Admins can access any course
       course = await Course.findOne({ _id: courseId })
         .populate('instructorId', 'name email profile')
         .populate('categoryId', 'name description');
     } else {
-      course = await Course.findOne({ _id: courseId, instructorId: userId })
+      // For non-admins, check if they are the instructor or enrolled in the course
+      course = await Course.findOne({ _id: courseId })
         .populate('instructorId', 'name email profile')
         .populate('categoryId', 'name description');
+      
+      if (course) {
+        // Check if user is the instructor
+        const isInstructor = course.instructorId._id.toString() === userId.toString();
+        console.log('getCourseDetail - User ID:', userId, 'Course Instructor ID:', course.instructorId._id, 'Is Instructor:', isInstructor);
+        
+        if (!isInstructor) {
+          // If not instructor, check if enrolled
+          const enrollment = await Enrollment.findOne({ userId, courseId });
+          console.log('getCourseDetail - Enrollment found:', !!enrollment);
+          if (!enrollment) {
+            return res.status(403).json({
+              success: false,
+              message: 'You are not enrolled in this course and do not have permission to access it'
+            });
+          }
+        } else {
+          // If user is the instructor, ensure they are enrolled (auto-enroll if not)
+          const enrollment = await Enrollment.findOne({ userId, courseId });
+          if (!enrollment) {
+            console.log('getCourseDetail - Auto-enrolling instructor in course:', courseId);
+            const newEnrollment = new Enrollment({
+              userId: req.user._id,
+              courseId: courseId,
+              status: 'active',
+              creditsPaid: course.priceCredits || 0,
+              progress: {
+                completedLessons: [],
+                currentLesson: null,
+                completionPercentage: 0,
+                timeSpent: 0,
+                lastAccessedAt: new Date()
+              }
+            });
+            await newEnrollment.save();
+            console.log('getCourseDetail - Instructor auto-enrolled successfully');
+          }
+        }
+      }
     }
 
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course not found'
       });
     }
 
@@ -277,6 +401,29 @@ export const createCourse = async (req: AuthRequest, res: Response, next: NextFu
     });
 
     await course.save();
+
+    // Automatically enroll the instructor in the course they created
+    const enrollment = new Enrollment({
+      userId: req.user._id,
+      courseId: course._id,
+      status: 'active',
+      creditsPaid: course.priceCredits || 0,
+      progress: {
+        completedLessons: [],
+        currentLesson: null,
+        completionPercentage: 0,
+        timeSpent: 0,
+        lastAccessedAt: new Date()
+      }
+    });
+
+    await enrollment.save();
+
+    console.log('createCourse - Created course and enrolled instructor:', {
+      courseId: course._id,
+      instructorId: req.user._id,
+      courseTitle: course.title
+    });
 
     res.status(201).json({
       success: true,

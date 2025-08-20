@@ -329,6 +329,71 @@ export const getUserCourses = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
+// @desc    Get user's enrolled courses (for learners)
+// @route   GET /api/users/enrolled-courses
+// @access  Private
+export const getEnrolledCourses = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get user's enrollments with course details
+    const enrollments = await Enrollment.find({ userId: req.user._id })
+      .populate({
+        path: 'courseId',
+        populate: [
+          { path: 'instructorId', select: 'name profile.avatar' },
+          { path: 'categoryId', select: 'name' }
+        ]
+      })
+      .sort({ enrolledAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Enrollment.countDocuments({ userId: req.user._id });
+
+    // Transform enrollments to course format with progress
+    const courses = enrollments.map((enrollment: any) => ({
+      _id: enrollment.courseId._id,
+      title: enrollment.courseId.title,
+      description: enrollment.courseId.description,
+      instructor: {
+        name: enrollment.courseId.instructorId?.name || 'Unknown Instructor'
+      },
+      category: {
+        name: enrollment.courseId.categoryId?.name || 'Uncategorized'
+      },
+      courseCode: enrollment.courseId.courseCode,
+      progress: enrollment.progress.completionPercentage,
+      stats: enrollment.courseId.stats || {
+        enrollments: 0,
+        completions: 0,
+        averageRating: 0,
+        totalRatings: 0
+      },
+      published: enrollment.courseId.published,
+      enrolledAt: enrollment.enrolledAt,
+      status: enrollment.status
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        courses,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get user analytics
 // @route   GET /api/users/analytics
 // @access  Private

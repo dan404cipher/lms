@@ -50,9 +50,8 @@ class CourseService {
   }
 
   async getMyCourses() {
-    // Since we removed the enrollment flow, this now gets all courses
-    // Users will see courses they have access to based on their role
-    const response = await courseAxios.get('/courses');
+    // Get user's enrolled courses
+    const response = await courseAxios.get('/users/enrolled-courses');
     return response.data;
   }
 
