@@ -83,6 +83,16 @@ const instructorService = {
     return response.data;
   },
 
+  async uploadLessonContent(courseId: string, moduleId: string, lessonId: string, formData: FormData) {
+    const response = await axios.post(`${API_BASE_URL}/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content`, formData, {
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
   // Assessment Management
   async getAssessments(courseId: string) {
     const response = await axios.get(`${API_BASE_URL}/instructor/courses/${courseId}/assessments`, {
@@ -234,6 +244,28 @@ const instructorService = {
   // Dashboard Stats
   async getDashboardStats() {
     const response = await axios.get(`${API_BASE_URL}/instructor/dashboard/stats`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  },
+
+  // Dashboard Data
+  async getUpcomingSessions() {
+    const response = await axios.get(`${API_BASE_URL}/instructor/dashboard/sessions`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  },
+
+  async getRecentAssessments() {
+    const response = await axios.get(`${API_BASE_URL}/instructor/dashboard/assessments`, {
+      headers: this.getAuthHeaders()
+    });
+    return response.data;
+  },
+
+  async getRecentMaterials() {
+    const response = await axios.get(`${API_BASE_URL}/instructor/dashboard/materials`, {
       headers: this.getAuthHeaders()
     });
     return response.data;

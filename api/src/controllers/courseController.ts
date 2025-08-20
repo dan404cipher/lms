@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import { Course } from '../models/Course';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
-import { uploadToS3, deleteFromS3 } from '../utils/s3';
+import { uploadFileLocally, deleteFileLocally } from '../utils/fileUpload';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -225,12 +225,12 @@ export const deleteCourse = async (req: AuthRequest, res: Response, next: NextFu
       });
     }
 
-    // Delete thumbnail from S3 if exists
+    // Delete thumbnail from local storage if exists
     if (course.thumbnail) {
       try {
-        await deleteFromS3(course.thumbnail);
+        await deleteFileLocally(course.thumbnail);
       } catch (error) {
-        console.error('Failed to delete thumbnail from S3:', error);
+        console.error('Failed to delete thumbnail from local storage:', error);
       }
     }
 
@@ -311,13 +311,13 @@ export const uploadThumbnail = async (req: AuthRequest, res: Response, next: Nex
       });
     }
 
-    // Upload to S3
-    const uploadResult = await uploadToS3(req.file, 'course-thumbnails');
+    // Upload to local storage
+    const uploadResult = await uploadFileLocally(req.file, 'course-thumbnails');
 
     // Delete old thumbnail if exists
     if (course.thumbnail) {
       try {
-        await deleteFromS3(course.thumbnail);
+        await deleteFileLocally(course.thumbnail);
       } catch (error) {
         console.error('Failed to delete old thumbnail:', error);
       }
@@ -744,29 +744,30 @@ export const uploadLessonContent = async (req: AuthRequest, res: Response, next:
       });
     }
 
-    // Upload to S3
-    const uploadResult = await uploadToS3(req.file, 'lesson-content');
+    // Upload file locally
+    console.log('Uploading lesson content:', {
+      lessonId: req.params.lessonId,
+      fileName: req.file.originalname,
+      fileSize: req.file.size
+    });
+    
+    const uploadResult = await uploadFileLocally(req.file, 'lesson-content');
+    console.log('Upload result:', uploadResult);
 
-    // Update lesson content based on content type
-    const contentType = lesson.contentType;
-    const contentUpdate: any = {};
+    // Update lesson with file information
+    const fileInfo = {
+      _id: new mongoose.Types.ObjectId().toString(),
+      name: req.file.originalname,
+      url: uploadResult.Location,
+      type: req.file.mimetype,
+      size: req.file.size
+    };
+    
+    console.log('File info:', fileInfo);
 
-    switch (contentType) {
-      case 'video':
-        contentUpdate['content.videoUrl'] = uploadResult.Location;
-        break;
-      case 'pdf':
-        contentUpdate['content.pdfUrl'] = uploadResult.Location;
-        break;
-      case 'scorm':
-        contentUpdate['content.scormUrl'] = uploadResult.Location;
-        break;
-      default:
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid content type for file upload'
-        });
-    }
+    const contentUpdate = {
+      $push: { files: fileInfo }
+    };
 
     const updatedLesson = await Lesson.findByIdAndUpdate(
       req.params.lessonId,
@@ -783,7 +784,17 @@ export const uploadLessonContent = async (req: AuthRequest, res: Response, next:
       }
     });
   } catch (error) {
-    next(error);
+    console.error('Upload lesson content error:', error);
+    if (error instanceof Error) {
+      return res.status(500).json({
+        success: false,
+        message: `Upload failed: ${error.message}`
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: 'Upload failed due to an unknown error'
+    });
   }
 };
 
@@ -824,8 +835,8 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
     }).sort({ order: 1 });
 
     // Calculate detailed progress
-    const totalVideos = lessons.filter(l => l.contentType === 'video').length;
-    const totalResources = lessons.filter(l => l.contentType === 'pdf' || l.contentType === 'scorm').length;
+    const totalVideos = lessons.filter(l => l.files && l.files.some(f => f.type.startsWith('video/'))).length;
+    const totalResources = lessons.filter(l => l.files && l.files.length > 0).length;
     
     // Mock data for now - in a real app, this would come from user activity tracking
     const videosCompleted = Math.floor(totalVideos * (enrollment.progress.completionPercentage / 100));
@@ -945,10 +956,9 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
             _id: lesson._id,
             title: lesson.title,
             description: lesson.description,
-            contentType: lesson.contentType,
-            duration: lesson.duration,
             order: lesson.order,
-            isPublished: lesson.isPublished
+            isPublished: lesson.isPublished,
+            files: lesson.files || []
           }))
       }))
     };

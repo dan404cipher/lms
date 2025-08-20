@@ -9,6 +9,7 @@ export interface ISession extends Document {
   duration: number; // in minutes
   zoomMeetingId?: string;
   joinUrl?: string;
+  startUrl?: string;
   recordingUrl?: string;
   type?: 'live-class' | 'quiz' | 'assignment' | 'discussion' | 'residency';
   hasRecording?: boolean;
@@ -53,6 +54,7 @@ const sessionSchema = new Schema<ISession>({
   },
   zoomMeetingId: String,
   joinUrl: String,
+  startUrl: String,
   recordingUrl: String,
   type: {
     type: String,

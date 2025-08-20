@@ -1,30 +1,103 @@
-import { uploadToS3 } from './s3';
+import fs from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
-export interface UploadResult {
-  url: string;
-  publicId: string;
-  format?: string;
-  size?: number;
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.resolve(__dirname, '../../uploads');
+const lessonContentDir = path.join(uploadsDir, 'lesson-content');
+
+// Ensure directories exist
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+if (!fs.existsSync(lessonContentDir)) {
+  fs.mkdirSync(lessonContentDir, { recursive: true });
 }
 
-export const uploadFile = async (file: Express.Multer.File): Promise<UploadResult> => {
+// Upload file locally
+export const uploadFileLocally = async (file: Express.Multer.File, folder: string = 'lesson-content'): Promise<{ Location: string; Key: string }> => {
   try {
-    // For now, we'll use a simple approach
-    // In production, you'd want to use S3 or another cloud storage
-    const fileName = `${Date.now()}-${file.originalname}`;
-    const fileUrl = `/uploads/${fileName}`;
+    console.log('Starting file upload:', { 
+      originalName: file.originalname, 
+      mimetype: file.mimetype, 
+      size: file.size,
+      folder 
+    });
     
-    // For development, we'll just return a mock URL
-    // In production, you'd upload to S3 and get the actual URL
-    const result: UploadResult = {
-      url: fileUrl,
-      publicId: fileName,
-      format: file.mimetype,
-      size: file.size
+    const fileExtension = file.originalname.split('.').pop() || 'file';
+    const fileName = `${uuidv4()}.${fileExtension}`;
+    const folderPath = path.join(uploadsDir, folder);
+    
+    console.log('Folder path:', folderPath);
+    
+    // Create folder if it doesn't exist
+    if (!fs.existsSync(folderPath)) {
+      console.log('Creating folder:', folderPath);
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+    
+    const filePath = path.join(folderPath, fileName);
+    console.log('File path:', filePath);
+    
+    // Write file to disk
+    fs.writeFileSync(filePath, file.buffer);
+    console.log('File written successfully');
+    
+    // Return the file URL (relative to the API base URL)
+    const fileUrl = `/uploads/${folder}/${fileName}`;
+    
+    console.log(`File uploaded locally: ${filePath}`);
+    console.log('File URL:', fileUrl);
+    
+    return {
+      Location: fileUrl,
+      Key: `${folder}/${fileName}`
     };
-
-    return result;
   } catch (error) {
-    throw new Error(`File upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('Local upload error:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw new Error(`Failed to upload file locally: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+};
+
+// Delete file locally
+export const deleteFileLocally = async (fileUrl: string): Promise<void> => {
+  try {
+    // Extract file path from URL
+    const urlPath = fileUrl.replace('/uploads/', '');
+    const filePath = path.join(uploadsDir, urlPath);
+    
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`File deleted locally: ${filePath}`);
+    }
+  } catch (error) {
+    console.error('Local delete error:', error);
+    throw new Error('Failed to delete file locally');
+  }
+};
+
+// Get file metadata
+export const getFileMetadata = async (fileUrl: string): Promise<{ size: number; lastModified: Date }> => {
+  try {
+    const urlPath = fileUrl.replace('/uploads/', '');
+    const filePath = path.join(uploadsDir, urlPath);
+    
+    if (!fs.existsSync(filePath)) {
+      throw new Error('File not found');
+    }
+    
+    const stats = fs.statSync(filePath);
+    
+    return {
+      size: stats.size,
+      lastModified: stats.mtime
+    };
+  } catch (error) {
+    console.error('Get file metadata error:', error);
+    throw new Error('Failed to get file metadata');
   }
 };

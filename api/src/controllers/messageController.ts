@@ -2,7 +2,7 @@ import { Response } from 'express';
 import Message from '../models/Message';
 import Connection from '../models/Connection';
 import { AuthenticatedRequest } from '../types';
-import { uploadFile } from '../utils/fileUpload';
+import { uploadFileLocally } from '../utils/fileUpload';
 
 // @desc    Send a message
 // @route   POST /api/chat/send
@@ -34,15 +34,15 @@ export const sendMessage = async (req: AuthenticatedRequest, res: Response): Pro
     if (files && files.length > 0) {
       for (const file of files) {
         try {
-          const uploadResult = await uploadFile(file);
+          const uploadResult = await uploadFileLocally(file, 'chat-media');
           const fileType = file.mimetype.startsWith('image/') ? 'image' : 'video';
           
           mediaFiles.push({
-            url: uploadResult.url,
-            publicId: uploadResult.publicId,
+            url: uploadResult.Location,
+            publicId: uploadResult.Key,
             type: fileType,
-            format: uploadResult.format,
-            size: uploadResult.size,
+            format: file.mimetype,
+            size: file.size,
             originalName: file.originalname
           });
         } catch (error) {

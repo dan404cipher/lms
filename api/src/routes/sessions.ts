@@ -7,15 +7,26 @@ import {
   updateSession, 
   deleteSession,
   joinSession,
+  startSession,
+  endSession,
   getSessionAttendance,
   markAttendance,
-  getMyActivities
+  getMyActivities,
+  getSessionRecordings,
+  getRecordings,
+  downloadRecording,
+  downloadRecordingManually,
+  checkForRecordings,
+  zoomWebhook
 } from '../controllers/sessionController';
 import { protect, authorize } from '../middleware/auth';
 
 const router = express.Router();
 
-// All routes require authentication
+// Webhook route (no authentication required)
+router.post('/webhook', zoomWebhook);
+
+// All other routes require authentication
 router.use(protect);
 
 // Validation middleware
@@ -30,6 +41,11 @@ const sessionValidation = [
 // Public routes (authenticated users)
 router.get('/', getSessions);
 router.get('/my-activities', getMyActivities);
+
+// Recordings routes (must come before /:id routes)
+router.get('/recordings', getRecordings);
+router.get('/recordings/:recordingId/download', downloadRecording);
+
 router.get('/:id', getSession);
 router.post('/:id/join', joinSession);
 
@@ -39,6 +55,17 @@ router.use(authorize('instructor', 'admin', 'super_admin'));
 router.post('/', sessionValidation, createSession);
 router.put('/:id', sessionValidation, updateSession);
 router.delete('/:id', deleteSession);
+
+// Session management
+router.post('/:id/start', startSession);
+router.post('/:id/end', endSession);
+
+// Session-specific recordings
+router.get('/:id/recordings', getSessionRecordings);
+router.post('/:id/download-recording', downloadRecordingManually);
+router.post('/:id/check-recordings', checkForRecordings);
+
+// Attendance
 router.get('/:id/attendance', getSessionAttendance);
 router.post('/:id/attendance', markAttendance);
 

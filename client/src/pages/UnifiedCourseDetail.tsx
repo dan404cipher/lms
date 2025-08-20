@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   BookOpen, 
   User, 
@@ -25,10 +30,13 @@ import {
   Target,
   Download,
   Eye,
-
+  X,
+  Upload,
 } from "lucide-react";
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
+import ScheduleSessionModal from "@/components/ScheduleSessionModal";
+import SessionsAndRecordings from "@/components/SessionsAndRecordings";
 
 interface CourseResource {
   _id: string;
@@ -94,10 +102,15 @@ interface Lesson {
   _id: string;
   title: string;
   description: string;
-  contentType: 'video' | 'pdf' | 'scorm';
-  duration: number;
   order: number;
   isPublished: boolean;
+  files?: Array<{
+    _id: string;
+    name: string;
+    url: string;
+    type: string;
+    size: number;
+  }>;
 }
 
 interface Assessment {
@@ -188,15 +201,51 @@ const UnifiedCourseDetail = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [showAddForm, setShowAddForm] = useState<string | null>(null);
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    order: 1,
+    type: 'quiz',
+    dueDate: '',
+    totalPoints: 100,
+    duration: 60,
+    scheduledAt: '',
+    content: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   const isInstructor = user?.role === 'instructor';
 
+  // Function to get button text and action based on active tab
+  const getAddButtonConfig = () => {
+    switch (activeTab) {
+      case 'content':
+        return { text: 'Add Module', action: 'module' };
+      case 'assessments':
+        return { text: 'Add Assessment', action: 'assessment' };
+      case 'materials':
+        return { text: 'Upload Material', action: 'material' };
+      case 'sessions':
+        return { text: 'Schedule Session', action: 'session' };
+      case 'announcements':
+        return { text: 'New Announcement', action: 'announcement' };
+      default:
+        return { text: 'Add Module', action: 'module' };
+    }
+  };
 
+  const { text: addButtonText, action: addButtonAction } = getAddButtonConfig();
 
   useEffect(() => {
     const fetchCourseDetail = async () => {
@@ -209,8 +258,42 @@ const UnifiedCourseDetail = () => {
           : await courseService.getCourseDetail(courseId);
         
         setCourse(response.data.course);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching course detail:', error);
+        if (error.response?.status === 403) {
+          toast({
+            title: "Access Denied",
+            description: "You don't have permission to access this course. Please log in again.",
+            variant: "destructive",
+          });
+          // Clear auth and redirect to login
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          window.location.href = '/login';
+        } else if (error.response?.status === 404) {
+          toast({
+            title: "Course Not Found",
+            description: "The course you're looking for doesn't exist. The database has been refreshed.",
+            variant: "destructive",
+          });
+          navigate('/courses');
+        } else if (error.response?.status === 401) {
+          toast({
+            title: "Authentication Required",
+            description: "Please log in again to continue.",
+            variant: "destructive",
+          });
+          // Clear auth and redirect to login
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          window.location.href = '/login';
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to load course details. Please try again.",
+            variant: "destructive",
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -244,6 +327,130 @@ const UnifiedCourseDetail = () => {
 
   const handleViewVideo = (video: CourseVideo) => {
     console.log('Viewing video:', video);
+  };
+
+  const handleFormSubmit = async () => {
+    if (!courseId || !formData.title.trim()) return;
+    
+    setIsSubmitting(true);
+    try {
+      switch (showAddForm) {
+        case 'module':
+          await instructorService.createModule(courseId, {
+            title: formData.title,
+            description: formData.description,
+            order: formData.order
+          });
+          break;
+        case 'assessment':
+          await instructorService.createAssessment(courseId, {
+            title: formData.title,
+            description: formData.description,
+            type: formData.type,
+            dueDate: formData.dueDate,
+            totalPoints: formData.totalPoints
+          });
+          break;
+        case 'session':
+          // Open the schedule session modal instead of creating directly
+          setIsScheduleModalOpen(true);
+          return; // Don't proceed with the rest of the function
+        case 'announcement':
+          await instructorService.createAnnouncement(courseId, {
+            title: formData.title,
+            content: formData.content
+          });
+          break;
+        case 'material':
+          // For materials, show a message that this feature is coming soon
+          toast({
+            title: "Coming Soon",
+            description: "File upload functionality will be available in a future update.",
+          });
+          return; // Don't proceed with the rest of the function
+        case 'lesson':
+          if (!selectedModuleId) {
+            toast({
+              title: "Error",
+              description: "No module selected for lesson creation.",
+              variant: "destructive",
+            });
+            return;
+          }
+          await instructorService.createLesson(courseId, selectedModuleId, {
+            title: formData.title,
+            description: formData.description,
+            order: formData.order
+          });
+          break;
+        default:
+          break;
+      }
+      
+      // Refresh course data
+      const response = await instructorService.getCourseDetail(courseId);
+      setCourse(response.data.course);
+      
+      // Show success message
+      toast({
+        title: "Success!",
+        description: `${showAddForm === 'module' ? 'Module' : 
+                      showAddForm === 'assessment' ? 'Assessment' : 
+                      showAddForm === 'session' ? 'Session' : 
+                      showAddForm === 'announcement' ? 'Announcement' : 
+                      showAddForm === 'lesson' ? 'Lesson' : 'Item'} created successfully.`,
+      });
+      
+      // Reset form and close modal
+      setFormData({
+        title: '',
+        description: '',
+        order: 1,
+        type: 'quiz',
+        dueDate: '',
+        totalPoints: 100,
+        duration: 60,
+        scheduledAt: '',
+        content: ''
+      });
+      setShowAddForm(null);
+      setSelectedModuleId(null);
+    } catch (error: any) {
+      console.error('Error creating item:', error);
+      let errorMessage = "Failed to create item. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Module not found. The database has been refreshed. Please refresh the page.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "Please log in again to continue.";
+        // Clear auth and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/login';
+        return;
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to perform this action.";
+        // Clear auth and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        window.location.href = '/login';
+        return;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleViewRecording = (recording: CourseRecording) => {
@@ -302,9 +509,9 @@ const UnifiedCourseDetail = () => {
           <div className="flex items-center gap-2">
 
             {isInstructor && (
-              <Button onClick={() => setShowAddForm('module')}>
+              <Button onClick={() => addButtonAction === 'session' ? setIsScheduleModalOpen(true) : setShowAddForm(addButtonAction)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Module
+                {addButtonText}
               </Button>
             )}
           </div>
@@ -456,12 +663,6 @@ const UnifiedCourseDetail = () => {
               <CardTitle className="flex items-center space-x-2">
                 <BookOpen className="h-5 w-5" />
                 <span>Course Modules</span>
-                {isInstructor && (
-                  <Button size="sm" onClick={() => setShowAddForm('module')} className="ml-auto">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Module
-                  </Button>
-                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -491,19 +692,47 @@ const UnifiedCourseDetail = () => {
                         <div className="mt-3 space-y-2">
                           <p className="text-sm text-muted-foreground">{module.description}</p>
                           {module.lessons.map((lesson) => (
-                            <div key={lesson._id} className="flex items-center justify-between p-2 border rounded bg-background">
+                            <div 
+                              key={lesson._id} 
+                              className="flex items-center justify-between p-2 border rounded bg-background hover:bg-muted/50 transition-colors cursor-pointer"
+                              onClick={() => navigate(`/courses/${courseId}/lessons/${lesson._id}`)}
+                            >
                               <div className="flex items-center space-x-2">
-                                {lesson.contentType === 'video' ? <Video className="h-4 w-4 text-blue-600" /> : <FileText className="h-4 w-4 text-green-600" />}
+                                <FileText className="h-4 w-4 text-green-600" />
                                 <span className="text-sm">{lesson.title}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  {lesson.duration} min
-                                </Badge>
+                                {lesson.files && lesson.files.length > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {lesson.files.length} file{lesson.files.length !== 1 ? 's' : ''}
+                                  </Badge>
+                                )}
                               </div>
                               {isInstructor && (
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
                                   <Badge variant={lesson.isPublished ? "default" : "secondary"}>
                                     {lesson.isPublished ? 'Published' : 'Draft'}
                                   </Badge>
+                                  {lesson.files && lesson.files.length > 0 && (
+                                    <Button variant="ghost" size="sm">
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedLessonId(lesson._id);
+                                      setShowFileUpload(true);
+                                    }}
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => navigate(`/courses/${courseId}/lessons/${lesson._id}`)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
                                   <Button variant="ghost" size="sm">
                                     <Edit className="h-4 w-4" />
                                   </Button>
@@ -511,6 +740,22 @@ const UnifiedCourseDetail = () => {
                               )}
                             </div>
                           ))}
+                          {isInstructor && (
+                            <div className="pt-2 border-t">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => {
+                                  setSelectedModuleId(module._id);
+                                  setShowFileUpload(true);
+                                }}
+                                className="w-full"
+                              >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Files
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -533,12 +778,6 @@ const UnifiedCourseDetail = () => {
               <CardTitle className="flex items-center space-x-2">
                 <FileText className="h-5 w-5" />
                 <span>Assessments</span>
-                {isInstructor && (
-                  <Button size="sm" onClick={() => setShowAddForm('assessment')} className="ml-auto">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Assessment
-                  </Button>
-                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -585,12 +824,6 @@ const UnifiedCourseDetail = () => {
               <CardTitle className="flex items-center space-x-2">
                 <Download className="h-5 w-5" />
                 <span>Course Materials</span>
-                {isInstructor && (
-                  <Button size="sm" onClick={() => setShowAddForm('material')} className="ml-auto">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Upload Material
-                  </Button>
-                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -627,52 +860,7 @@ const UnifiedCourseDetail = () => {
         {/* Sessions Tab - Instructor Only */}
         {isInstructor && (
           <TabsContent value="sessions" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Video className="h-5 w-5" />
-                  <span>Live Sessions</span>
-                  <Button size="sm" onClick={() => setShowAddForm('session')} className="ml-auto">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Schedule Session
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {course.sessions && course.sessions.length > 0 ? (
-                  <div className="space-y-3">
-                    {course.sessions.map((session) => (
-                      <div key={session._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center space-x-3">
-                          <Video className="h-4 w-4 text-green-600" />
-                          <div>
-                            <h4 className="font-medium">{session.title}</h4>
-                            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">{session.type}</Badge>
-                              <span>{session.scheduledAt}</span>
-                              <span>{session.duration} min</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant={session.status === 'live' ? "default" : "secondary"}>
-                            {session.status}
-                          </Badge>
-                          <Button size="sm" variant="outline">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6">
-                    <Video className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No sessions scheduled</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <SessionsAndRecordings courseId={courseId!} isInstructor={isInstructor} />
           </TabsContent>
         )}
 
@@ -684,10 +872,6 @@ const UnifiedCourseDetail = () => {
                 <CardTitle className="flex items-center space-x-2">
                   <Bell className="h-5 w-5" />
                   <span>Announcements</span>
-                  <Button size="sm" onClick={() => setShowAddForm('announcement')} className="ml-auto">
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Announcement
-                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -719,6 +903,450 @@ const UnifiedCourseDetail = () => {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Add Form Modal */}
+      <Dialog open={showAddForm !== null} onOpenChange={() => {
+        setShowAddForm(null);
+        setSelectedModuleId(null);
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {showAddForm === 'module' && 'Add New Module'}
+              {showAddForm === 'assessment' && 'Add New Assessment'}
+              {showAddForm === 'session' && 'Schedule New Session'}
+              {showAddForm === 'announcement' && 'Create New Announcement'}
+              {showAddForm === 'material' && 'Upload New Material'}
+              {showAddForm === 'lesson' && 'Add New Lesson'}
+            </DialogTitle>
+            <DialogDescription>
+              {showAddForm === 'module' && 'Create a new module for your course content.'}
+              {showAddForm === 'assessment' && 'Create a new assessment for your students.'}
+              {showAddForm === 'session' && 'Schedule a new live session for your students.'}
+              {showAddForm === 'announcement' && 'Create a new announcement for your course.'}
+              {showAddForm === 'material' && 'Upload new course materials for your students.'}
+              {showAddForm === 'lesson' && 'Create a new lesson within the selected module.'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            {/* Title Field */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="title" className="text-right">
+                Title
+              </Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => handleInputChange('title', e.target.value)}
+                className="col-span-3"
+                placeholder="Enter title..."
+              />
+            </div>
+
+            {/* Description Field */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="description" className="text-right">
+                Description
+              </Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                className="col-span-3"
+                placeholder="Enter description..."
+                rows={3}
+              />
+            </div>
+
+            {/* Conditional Fields Based on Form Type */}
+            {showAddForm === 'module' && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="order" className="text-right">
+                  Order
+                </Label>
+                <Input
+                  id="order"
+                  type="number"
+                  value={formData.order}
+                  onChange={(e) => handleInputChange('order', parseInt(e.target.value))}
+                  className="col-span-3"
+                  min="1"
+                />
+              </div>
+            )}
+
+            {showAddForm === 'assessment' && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="type" className="text-right">
+                    Type
+                  </Label>
+                  <select
+                    id="type"
+                    value={formData.type}
+                    onChange={(e) => handleInputChange('type', e.target.value)}
+                    className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="quiz">Quiz</option>
+                    <option value="assignment">Assignment</option>
+                    <option value="exam">Exam</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="dueDate" className="text-right">
+                    Due Date
+                  </Label>
+                  <Input
+                    id="dueDate"
+                    type="datetime-local"
+                    value={formData.dueDate}
+                    onChange={(e) => handleInputChange('dueDate', e.target.value)}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="totalPoints" className="text-right">
+                    Total Points
+                  </Label>
+                  <Input
+                    id="totalPoints"
+                    type="number"
+                    value={formData.totalPoints}
+                    onChange={(e) => handleInputChange('totalPoints', parseInt(e.target.value))}
+                    className="col-span-3"
+                    min="1"
+                  />
+                </div>
+              </>
+            )}
+
+            {showAddForm === 'session' && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="sessionType" className="text-right">
+                    Type
+                  </Label>
+                  <select
+                    id="sessionType"
+                    value={formData.type}
+                    onChange={(e) => handleInputChange('type', e.target.value)}
+                    className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="live-class">Live Class</option>
+                    <option value="office-hours">Office Hours</option>
+                    <option value="review">Review Session</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="scheduledAt" className="text-right">
+                    Scheduled At
+                  </Label>
+                  <Input
+                    id="scheduledAt"
+                    type="datetime-local"
+                    value={formData.scheduledAt}
+                    onChange={(e) => handleInputChange('scheduledAt', e.target.value)}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="duration" className="text-right">
+                    Duration (min)
+                  </Label>
+                  <Input
+                    id="duration"
+                    type="number"
+                    value={formData.duration}
+                    onChange={(e) => handleInputChange('duration', parseInt(e.target.value))}
+                    className="col-span-3"
+                    min="1"
+                  />
+                </div>
+              </>
+            )}
+
+            {showAddForm === 'announcement' && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="content" className="text-right">
+                  Content
+                </Label>
+                <Textarea
+                  id="content"
+                  value={formData.content}
+                  onChange={(e) => handleInputChange('content', e.target.value)}
+                  className="col-span-3"
+                  placeholder="Enter announcement content..."
+                  rows={4}
+                />
+              </div>
+            )}
+
+            {showAddForm === 'material' && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">
+                  File Upload
+                </Label>
+                <div className="col-span-3 text-sm text-muted-foreground">
+                  File upload functionality will be implemented in a future update.
+                  For now, please use the course management interface.
+                </div>
+              </div>
+            )}
+
+            {showAddForm === 'lesson' && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">
+                    Module
+                  </Label>
+                  <div className="col-span-3 text-sm text-muted-foreground">
+                    {course.modules?.find(m => m._id === selectedModuleId)?.title || 'Unknown Module'}
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="order" className="text-right">
+                    Order
+                  </Label>
+                  <Input
+                    id="order"
+                    type="number"
+                    value={formData.order || 1}
+                    onChange={(e) => handleInputChange('order', parseInt(e.target.value))}
+                    className="col-span-3"
+                    min="1"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">
+                    Content Files
+                  </Label>
+                  <div className="col-span-3 text-sm text-muted-foreground">
+                    Files can be uploaded after creating the lesson.
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => {
+              setShowAddForm(null);
+              setSelectedModuleId(null);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleFormSubmit} disabled={isSubmitting || !formData.title.trim()}>
+              {isSubmitting ? 'Creating...' : 'Create'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Upload Modal */}
+      <Dialog open={showFileUpload} onOpenChange={() => {
+        setShowFileUpload(false);
+        setSelectedLessonId(null);
+        setSelectedModuleId(null);
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedLessonId ? 'Upload Files to Lesson' : 'Add Files to Module'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedLessonId 
+                ? 'Upload files to add content to this lesson. All file types are accepted.'
+                : 'Upload files to create a new lesson in this module. All file types are accepted.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">
+                {selectedLessonId ? 'Lesson' : 'Module'}
+              </Label>
+              <div className="col-span-3 text-sm text-muted-foreground">
+                {selectedLessonId 
+                  ? course.modules?.flatMap(m => m.lessons)?.find(l => l._id === selectedLessonId)?.title || 'Unknown Lesson'
+                  : course.modules?.find(m => m._id === selectedModuleId)?.title || 'Unknown Module'
+                }
+              </div>
+            </div>
+            
+            {!selectedLessonId && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="lessonTitle" className="text-right">
+                  Lesson Title
+                </Label>
+                <Input
+                  id="lessonTitle"
+                  value={formData.title}
+                  onChange={(e) => handleInputChange('title', e.target.value)}
+                  className="col-span-3"
+                  placeholder="Enter lesson title..."
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="files" className="text-right">
+                Files
+              </Label>
+              <div className="col-span-3">
+                <Input
+                  id="files"
+                  type="file"
+                  multiple
+                  accept="*/*"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                      setSelectedFiles(files);
+                      console.log('Files selected:', files);
+                    }
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Select one or more files to upload. All file types are accepted.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => {
+              setShowFileUpload(false);
+              setSelectedLessonId(null);
+              setSelectedModuleId(null);
+            }}>
+              Cancel
+            </Button>
+            <Button disabled={isSubmitting} onClick={async () => {
+              if (!selectedLessonId && !formData.title.trim()) {
+                toast({
+                  title: "Error",
+                  description: "Please enter a lesson title.",
+                  variant: "destructive",
+                });
+                return;
+              }
+              
+              if (!selectedFiles || selectedFiles.length === 0) {
+                toast({
+                  title: "Error",
+                  description: "Please select at least one file to upload.",
+                  variant: "destructive",
+                });
+                return;
+              }
+              
+              try {
+                setIsSubmitting(true);
+                
+                if (!selectedLessonId) {
+                  // Create new lesson first
+                  const lessonResponse = await instructorService.createLesson(courseId!, selectedModuleId!, {
+                    title: formData.title,
+                    description: formData.description || '',
+                    order: formData.order
+                  });
+                  
+                  const newLessonId = lessonResponse.data.lesson._id;
+                  
+                  // Upload files to the new lesson
+                  for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const formData = new FormData();
+                    formData.append('content', file);
+                    
+                    await instructorService.uploadLessonContent(courseId!, selectedModuleId!, newLessonId, formData);
+                  }
+                  
+                  toast({
+                    title: "Success!",
+                    description: `Lesson created and ${selectedFiles.length} file(s) uploaded successfully.`,
+                  });
+                } else {
+                  // Upload files to existing lesson
+                  for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const formData = new FormData();
+                    formData.append('content', file);
+                    
+                    await instructorService.uploadLessonContent(courseId!, selectedModuleId!, selectedLessonId, formData);
+                  }
+                  
+                  toast({
+                    title: "Success!",
+                    description: `${selectedFiles.length} file(s) uploaded successfully.`,
+                  });
+                }
+                
+                setShowFileUpload(false);
+                setSelectedLessonId(null);
+                setSelectedModuleId(null);
+                setSelectedFiles(null);
+                
+                // Refresh course data
+                const response = await instructorService.getCourseDetail(courseId!);
+                setCourse(response.data.course);
+              } catch (error: any) {
+                console.error('Error:', error);
+                let errorMessage = "Failed to upload files. Please try again.";
+                
+                if (error.response?.status === 404) {
+                  errorMessage = "Lesson or module not found. Please refresh the page and try again.";
+                } else if (error.response?.status === 401) {
+                  errorMessage = "Please log in again to continue.";
+                  localStorage.removeItem('token');
+                  localStorage.removeItem('refreshToken');
+                  window.location.href = '/login';
+                  return;
+                } else if (error.response?.status === 403) {
+                  errorMessage = "You don't have permission to upload files to this lesson.";
+                } else if (error.response?.status === 500) {
+                  errorMessage = "Server error during file upload. Please try again.";
+                } else if (error.response?.data?.message) {
+                  errorMessage = error.response.data.message;
+                }
+                
+                toast({
+                  title: "Error",
+                  description: errorMessage,
+                  variant: "destructive",
+                });
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}>
+              {isSubmitting ? 'Uploading...' : (selectedLessonId ? 'Upload Files' : 'Create Lesson with Files')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Session Modal */}
+      <ScheduleSessionModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        courseId={courseId}
+        onSessionCreated={() => {
+          // Refresh course data to show new session
+          const fetchCourseDetail = async () => {
+            try {
+              const response = isInstructor 
+                ? await instructorService.getCourseDetail(courseId!)
+                : await courseService.getCourseDetail(courseId!);
+              setCourse(response.data.course);
+            } catch (error) {
+              console.error('Error refreshing course data:', error);
+            }
+          };
+          fetchCourseDetail();
+        }}
+      />
     </div>
   );
 };

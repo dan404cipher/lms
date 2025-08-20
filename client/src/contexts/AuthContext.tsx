@@ -20,10 +20,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (token) {
       authService.getProfile()
         .then(response => {
-          setUser(response.data.user);
+          if (response.success) {
+            setUser(response.data.user);
+          } else {
+            // Invalid response format, clear tokens
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            setUser(null);
+          }
         })
-        .catch(() => {
+        .catch(async (error) => {
+          console.log('Profile fetch failed:', error.response?.status);
+          
+          // If token is expired, try to refresh
+          if (error.response?.status === 401) {
+            const refreshToken = localStorage.getItem('refreshToken');
+            if (refreshToken) {
+              try {
+                const refreshResponse = await authService.refreshToken(refreshToken);
+                if (refreshResponse.success) {
+                  localStorage.setItem('token', refreshResponse.data.token);
+                  localStorage.setItem('refreshToken', refreshResponse.data.refreshToken);
+                  setUser(refreshResponse.data.user);
+                  return;
+                }
+              } catch (refreshError) {
+                console.log('Token refresh failed:', refreshError);
+              }
+            }
+          }
+          
+          // Clear invalid tokens
           localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          setUser(null);
         })
         .finally(() => {
           setLoading(false);

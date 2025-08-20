@@ -157,3 +157,6 @@ coverage/
 
 # Uploads
 uploads/
+
+# Recordings (large video files)
+recordings/

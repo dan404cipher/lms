@@ -311,47 +311,27 @@ const lessons = [
   {
     title: 'Welcome to the Course',
     description: 'Introduction and course overview',
-    content: 'Welcome to the Complete Web Development Bootcamp! In this course, you will learn everything you need to become a full-stack web developer.',
-    duration: 15, // minutes
-    order: 1,
-    type: 'video',
-    contentType: 'video'
+    order: 1
   },
   {
     title: 'Setting Up Your Development Environment',
     description: 'Install and configure your development tools',
-    content: 'Learn how to set up VS Code, Node.js, and other essential development tools.',
-    duration: 30,
-    order: 2,
-    type: 'video',
-    contentType: 'video'
+    order: 2
   },
   {
     title: 'HTML Basics',
     description: 'Learn the fundamentals of HTML',
-    content: 'HTML is the backbone of every website. Learn about elements, attributes, and semantic markup.',
-    duration: 45,
-    order: 3,
-    type: 'video',
-    contentType: 'video'
+    order: 3
   },
   {
     title: 'CSS Styling',
     description: 'Make your websites beautiful with CSS',
-    content: 'Learn CSS selectors, properties, and layout techniques to create stunning designs.',
-    duration: 60,
-    order: 4,
-    type: 'video',
-    contentType: 'video'
+    order: 4
   },
   {
     title: 'JavaScript Fundamentals',
     description: 'Programming basics with JavaScript',
-    content: 'Learn variables, functions, loops, and other programming concepts with JavaScript.',
-    duration: 90,
-    order: 5,
-    type: 'video',
-    contentType: 'video'
+    order: 5
   }
 ];
 

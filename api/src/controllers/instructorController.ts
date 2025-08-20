@@ -228,10 +228,9 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
             _id: lesson._id,
             title: lesson.title,
             description: lesson.description,
-            contentType: lesson.contentType,
-            duration: lesson.duration,
             order: lesson.order,
-            isPublished: lesson.isPublished
+            isPublished: lesson.isPublished,
+            files: lesson.files || []
           }))
       })),
       instructorAssessments: assessments, // Keep original assessments for instructor features
@@ -380,6 +379,64 @@ export const getDashboardStats = async (req: AuthRequest, res: Response, next: N
   }
 };
 
+// Get upcoming sessions for dashboard
+export const getUpcomingSessions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    const courses = await Course.find({ instructorId: userId });
+    
+    const sessions = await Session.find({ 
+      courseId: { $in: courses.map(c => c._id) },
+      status: 'scheduled'
+    }).populate('courseId', 'title').sort({ scheduledAt: 1 }).limit(5);
+
+    res.json({
+      success: true,
+      data: { sessions }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get recent assessments for dashboard
+export const getRecentAssessments = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    const courses = await Course.find({ instructorId: userId });
+    
+    const assessments = await Assessment.find({ 
+      courseId: { $in: courses.map(c => c._id) }
+    }).populate('courseId', 'title').sort({ createdAt: -1 }).limit(5);
+
+    res.json({
+      success: true,
+      data: { assessments }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get recent materials for dashboard
+export const getRecentMaterials = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    const courses = await Course.find({ instructorId: userId });
+    
+    const materials = await Material.find({ 
+      courseId: { $in: courses.map(c => c._id) }
+    }).populate('courseId', 'title').sort({ createdAt: -1 }).limit(5);
+
+    res.json({
+      success: true,
+      data: { materials }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Module Management
 export const createModule = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -428,14 +485,12 @@ export const createLesson = async (req: AuthRequest, res: Response, next: NextFu
       });
     }
 
-    const { title, description, contentType, duration, order } = req.body;
+    const { title, description, order } = req.body;
 
     const lesson = new Lesson({
       moduleId,
       title,
       description,
-      contentType,
-      duration: duration || 0,
       order: order || 1,
       isPublished: false
     });

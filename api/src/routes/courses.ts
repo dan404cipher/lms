@@ -20,7 +20,7 @@ import {
   uploadLessonContent
 } from '../controllers/courseController';
 import { protect, authorize } from '../middleware/auth';
-import { upload } from '../middleware/upload';
+import { upload, handleMulterError } from '../middleware/upload';
 
 const router = express.Router();
 
@@ -46,9 +46,7 @@ const moduleValidation = [
 const lessonValidation = [
   body('title').trim().isLength({ min: 3, max: 100 }).withMessage('Title must be between 3 and 100 characters'),
   body('description').optional().trim().isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
-  body('contentType').isIn(['video', 'pdf', 'scorm', 'html', 'quiz', 'assignment']).withMessage('Invalid content type'),
-  body('order').isInt({ min: 1 }).withMessage('Order must be a positive integer'),
-  body('duration').optional().isInt({ min: 0 }).withMessage('Duration must be a non-negative integer')
+  body('order').isInt({ min: 1 }).withMessage('Order must be a positive integer')
 ];
 
 // Public routes
@@ -72,7 +70,7 @@ router.delete('/:id', deleteCourse);
 router.post('/:id/publish', publishCourse);
 
 // File uploads
-router.post('/:id/thumbnail', upload.single('thumbnail'), uploadThumbnail);
+router.post('/:id/thumbnail', upload.single('thumbnail'), handleMulterError, uploadThumbnail);
 
 // Module management
 router.post('/:courseId/modules', moduleValidation, createModule);
@@ -83,6 +81,6 @@ router.delete('/:courseId/modules/:moduleId', deleteModule);
 router.post('/:courseId/modules/:moduleId/lessons', lessonValidation, createLesson);
 router.put('/:courseId/modules/:moduleId/lessons/:lessonId', lessonValidation, updateLesson);
 router.delete('/:courseId/modules/:moduleId/lessons/:lessonId', deleteLesson);
-router.post('/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), uploadLessonContent);
+router.post('/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 
 export default router;

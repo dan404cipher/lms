@@ -4,23 +4,15 @@ export interface ILesson extends Document {
   moduleId: mongoose.Types.ObjectId;
   title: string;
   description: string;
-  contentType: 'video' | 'pdf' | 'scorm' | 'html' | 'quiz' | 'assignment';
-  content: {
-    videoUrl?: string;
-    pdfUrl?: string;
-    scormUrl?: string;
-    htmlContent?: string;
-    quizId?: mongoose.Types.ObjectId;
-    assignmentId?: mongoose.Types.ObjectId;
-  };
-  duration: number; // in minutes
   order: number;
   isPublished: boolean;
   isFree: boolean;
-  resources: {
-    title: string;
+  files: {
+    _id: string;
+    name: string;
     url: string;
-    type: 'pdf' | 'video' | 'link' | 'download';
+    type: string;
+    size: number;
   }[];
   createdAt: Date;
   updatedAt: Date;
@@ -42,30 +34,6 @@ const lessonSchema = new Schema<ILesson>({
     type: String,
     maxlength: [500, 'Description cannot be more than 500 characters']
   },
-  contentType: {
-    type: String,
-    enum: ['video', 'pdf', 'scorm', 'html', 'quiz', 'assignment'],
-    required: [true, 'Content type is required']
-  },
-  content: {
-    videoUrl: String,
-    pdfUrl: String,
-    scormUrl: String,
-    htmlContent: String,
-    quizId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Quiz'
-    },
-    assignmentId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Assignment'
-    }
-  },
-  duration: {
-    type: Number,
-    default: 0,
-    min: [0, 'Duration cannot be negative']
-  },
   order: {
     type: Number,
     required: [true, 'Lesson order is required'],
@@ -79,8 +47,12 @@ const lessonSchema = new Schema<ILesson>({
     type: Boolean,
     default: false
   },
-  resources: [{
-    title: {
+  files: [{
+    _id: {
+      type: String,
+      required: true
+    },
+    name: {
       type: String,
       required: true,
       trim: true
@@ -91,7 +63,10 @@ const lessonSchema = new Schema<ILesson>({
     },
     type: {
       type: String,
-      enum: ['pdf', 'video', 'link', 'download'],
+      required: true
+    },
+    size: {
+      type: Number,
       required: true
     }
   }]
@@ -102,7 +77,6 @@ const lessonSchema = new Schema<ILesson>({
 // Indexes for better query performance
 lessonSchema.index({ moduleId: 1, order: 1 });
 lessonSchema.index({ moduleId: 1, isPublished: 1 });
-lessonSchema.index({ contentType: 1 });
 
 // Ensure unique order within a module
 lessonSchema.index({ moduleId: 1, order: 1 }, { unique: true });

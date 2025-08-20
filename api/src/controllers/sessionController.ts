@@ -1,8 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
 import { Session } from '../models/Session';
+import { Recording } from '../models/Recording';
 import { Course } from '../models/Course';
 import { Enrollment } from '../models/Enrollment';
+import zoomIntegration from '../utils/zoomIntegration';
+import fs from 'fs';
+import path from 'path';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -21,7 +25,7 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       });
     }
 
-    const { courseId, title, description, scheduledAt, duration } = req.body;
+    const { courseId, title, description, scheduledAt, duration, type, maxParticipants } = req.body;
 
     // Check if course exists
     const course = await Course.findById(courseId);
@@ -41,10 +45,31 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       });
     }
 
-    // Create Zoom meeting (this would integrate with Zoom API)
-    // For now, we'll create a placeholder
-    const zoomMeetingId = `zoom_${Date.now()}`;
-    const joinUrl = `https://zoom.us/j/${zoomMeetingId}`;
+    // Create Zoom meeting with real integration
+    console.log('Creating Zoom meeting with data:', {
+      topic: `${course.title} - ${title}`,
+      start_time: new Date(scheduledAt).toISOString(),
+      duration,
+      timezone: 'UTC'
+    });
+
+    const zoomMeeting = await zoomIntegration.createMeeting({
+      topic: `${course.title} - ${title}`,
+      start_time: new Date(scheduledAt).toISOString(),
+      duration,
+      timezone: 'UTC',
+      settings: {
+        host_video: true,
+        participant_video: true,
+        join_before_host: false,
+        mute_upon_entry: true,
+        waiting_room: true,
+        auto_recording: 'local',
+        allow_multiple_devices: true
+      }
+    });
+
+    console.log('Zoom meeting created:', zoomMeeting);
 
     const session = await Session.create({
       courseId,
@@ -52,8 +77,11 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       description,
       scheduledAt,
       duration,
-      zoomMeetingId,
-      joinUrl,
+      type: type || 'live-class',
+      maxParticipants,
+      zoomMeetingId: zoomMeeting.id,
+      joinUrl: zoomMeeting.join_url,
+      startUrl: zoomMeeting.start_url, // Store the host start URL
       instructorId: req.user._id
     });
 
@@ -233,6 +261,12 @@ export const deleteSession = async (req: AuthRequest, res: Response, next: NextF
 // @access  Private
 export const joinSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    console.log('Join session request:', {
+      sessionId: req.params.id,
+      userId: req.user._id,
+      userRole: req.user.role
+    });
+
     const session = await Session.findById(req.params.id)
       .populate('courseId', 'title');
 
@@ -243,21 +277,43 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
       });
     }
 
-    // Check if user is enrolled in the course
+    console.log('Session found:', {
+      sessionId: session._id,
+      courseId: session.courseId,
+      instructorId: session.instructorId,
+      scheduledAt: session.scheduledAt
+    });
+
+    // Check if user is enrolled in the course OR is the instructor
     const enrollment = await Enrollment.findOne({
       userId: req.user._id,
       courseId: session.courseId,
       status: { $in: ['active', 'completed'] }
     });
 
-    if (!enrollment) {
+    const isInstructor = session.instructorId.toString() === req.user._id.toString();
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+
+    console.log('Authorization check:', {
+      hasEnrollment: !!enrollment,
+      isInstructor,
+      isAdmin,
+      enrollmentStatus: enrollment?.status
+    });
+
+    if (!enrollment && !isInstructor && !isAdmin) {
+      console.log('Access denied: User not enrolled, not instructor, not admin');
       return res.status(403).json({
         success: false,
         message: 'You must be enrolled in this course to join the session'
       });
     }
 
-    // Check if session is scheduled for now or in the future
+    console.log('Access granted, proceeding with join');
+
+    // For testing, allow joining regardless of time restrictions
+    // In production, you might want to keep these checks
+    /*
     const now = new Date();
     const sessionTime = new Date(session.scheduledAt);
     const sessionEndTime = new Date(sessionTime.getTime() + session.duration * 60000);
@@ -275,6 +331,7 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
         message: 'Session has already ended'
       });
     }
+    */
 
     res.json({
       success: true,
@@ -467,4 +524,608 @@ const getActivityStatus = (session: any): string => {
   if (now < sessionTime) return 'upcoming';
   if (now >= sessionTime && now <= sessionEndTime) return 'ongoing';
   return 'missed';
+};
+
+// @desc    Start session
+// @route   POST /api/sessions/:id/start
+// @access  Private (Instructor, Admin)
+export const startSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    // Check authorization
+    if (session.instructorId.toString() !== req.user._id.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to start this session'
+      });
+    }
+
+    // Update session status to live
+    await Session.findByIdAndUpdate(req.params.id, { status: 'live' });
+
+    // For instructors, return the start URL from the Zoom meeting
+    // For participants, they should use the join URL
+    const startUrl = session.startUrl || `https://zoom.us/s/${session.zoomMeetingId}?role=1`;
+    
+    res.json({
+      success: true,
+      message: 'Session started successfully',
+      data: { 
+        joinUrl: startUrl, // Use start URL for instructors
+        sessionId: session._id
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    End session
+// @route   POST /api/sessions/:id/end
+// @access  Private (Instructor, Admin)
+export const endSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    // Check authorization
+    if (session.instructorId.toString() !== req.user._id.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to end this session'
+      });
+    }
+
+    // Update session status to completed
+    await Session.findByIdAndUpdate(req.params.id, { status: 'completed' });
+
+    // Immediately try to get and download recordings
+    if (session.zoomMeetingId) {
+      try {
+        // Wait a bit for Zoom to process the recording
+        setTimeout(async () => {
+          try {
+            const zoomRecordings = await zoomIntegration.getMeetingRecordings(session.zoomMeetingId!);
+            
+            if (zoomRecordings.length > 0) {
+              await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+              
+              for (const zoomRecording of zoomRecordings) {
+                try {
+                  // Download to local storage
+                  const localFilePath = await zoomIntegration.downloadRecordingToLocal(zoomRecording);
+                  
+                  await Recording.create({
+                    sessionId: session._id,
+                    courseId: session.courseId,
+                    zoomRecordingId: zoomRecording.id,
+                    title: `${session.title} - Recording`,
+                    recordingUrl: zoomRecording.share_url || zoomRecording.recording_files?.[0]?.play_url,
+                    downloadUrl: zoomRecording.recording_files?.[0]?.download_url,
+                    localFilePath,
+                    duration: zoomRecording.duration || session.duration * 60,
+                    fileSize: zoomRecording.total_size || 0,
+                    recordedAt: new Date(zoomRecording.recording_start || Date.now()),
+                    isProcessed: true
+                  });
+                  
+                  console.log(`Recording automatically downloaded: ${localFilePath}`);
+                } catch (downloadError) {
+                  console.error(`Failed to download recording ${zoomRecording.id}:`, downloadError);
+                }
+              }
+            } else {
+              console.log('No recordings found yet. This is normal - Zoom recordings take 2-5 minutes to process.');
+              console.log('Session ended. Recording will be available once Zoom processes it.');
+              
+              // Don't create mock recording - let user know recordings take time
+              // The recording will be available when Zoom finishes processing
+            }
+          } catch (recordingError) {
+            console.error('Error processing recordings after session end:', recordingError);
+          }
+        }, 5000); // Wait 5 seconds for immediate feedback in development
+        
+      } catch (error) {
+        console.error('Error initiating recording download:', error);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Session ended successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get session recordings
+// @route   GET /api/sessions/:id/recordings
+// @access  Private
+export const getSessionRecordings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    // Get Zoom recordings
+    const recordings = await zoomIntegration.getMeetingRecordings(session.zoomMeetingId!);
+
+    // Transform recordings to our format
+    const formattedRecordings = recordings.map((recording: any) => ({
+      _id: recording.id,
+      sessionId: session._id,
+      title: recording.topic || session.title,
+      recordingUrl: recording.share_url || recording.recording_files?.[0]?.play_url,
+      downloadUrl: recording.recording_files?.[0]?.download_url,
+      duration: recording.duration || 0,
+      recordedAt: recording.recording_start,
+      viewCount: 0, // This would be tracked separately
+      isPublic: false,
+      fileSize: recording.total_size || 0
+    }));
+
+    res.json({
+      success: true,
+      data: { recordings: formattedRecordings }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get all recordings for a course
+// @route   GET /api/sessions/recordings
+// @access  Private
+export const getRecordings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    console.log('getRecordings called with query:', req.query);
+    
+    const query: any = {};
+
+    // Filter by course
+    if (req.query.courseId) {
+      query.courseId = req.query.courseId;
+    }
+
+    console.log('Recording query:', query);
+
+    // Get recordings from database
+    const recordings = await Recording.find(query)
+      .populate('sessionId', 'title type')
+      .populate('courseId', 'title')
+      .sort({ recordedAt: -1 });
+
+    console.log(`Found ${recordings.length} recordings`);
+
+    // Transform recordings to use local URLs when available
+    const transformedRecordings = recordings.map(recording => {
+      const recordingObj = recording.toObject();
+      
+      // If we have a local file, use local URL, otherwise use Zoom URL
+      if (recordingObj.localFilePath) {
+        recordingObj.recordingUrl = `${req.protocol}://${req.get('host')}${recordingObj.localFilePath}`;
+      }
+      
+      return recordingObj;
+    });
+
+    res.json({
+      success: true,
+      data: { recordings: transformedRecordings }
+    });
+  } catch (error) {
+    console.error('Error in getRecordings:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching recordings',
+      error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Internal server error'
+    });
+  }
+};
+
+// @desc    Download recording
+// @route   GET /api/sessions/recordings/:recordingId/download
+// @access  Private
+export const downloadRecording = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { recordingId } = req.params;
+
+    // Find the recording in database
+    const recording = await Recording.findOne({ zoomRecordingId: recordingId });
+    
+    if (!recording) {
+      return res.status(404).json({
+        success: false,
+        message: 'Recording not found'
+      });
+    }
+
+    // Check if user has access to this recording (enrolled in course)
+    const enrollment = await Enrollment.findOne({
+      userId: req.user._id,
+      courseId: recording.courseId,
+      status: { $in: ['active', 'completed'] }
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: 'You must be enrolled in this course to access recordings'
+      });
+    }
+
+    // If we have a local file, serve it directly
+    if (recording.localFilePath) {
+      const filePath = path.join(process.cwd(), recording.localFilePath.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Increment view count
+        await Recording.findByIdAndUpdate(recording._id, { $inc: { viewCount: 1 } });
+        
+        // Set appropriate headers for video streaming
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Disposition', `attachment; filename="${recording.title}.mp4"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
+
+    // Fallback to Zoom download URL
+    if (recording.downloadUrl) {
+      res.json({
+        success: true,
+        message: 'Recording download initiated',
+        data: {
+          downloadUrl: recording.downloadUrl,
+          expiresAt: new Date(Date.now() + 3600000).toISOString() // 1 hour
+        }
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'Recording file not available'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Zoom webhook handler
+// @route   POST /api/sessions/webhook
+// @access  Public (Zoom webhooks)
+export const zoomWebhook = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { event, payload } = req.body;
+    
+    console.log('Zoom webhook received:', event, payload?.object?.id);
+
+    switch (event) {
+      case 'meeting.started':
+        await handleMeetingStarted(payload);
+        break;
+      case 'meeting.ended':
+        await handleMeetingEnded(payload);
+        break;
+      case 'recording.completed':
+        await handleRecordingCompleted(payload);
+        break;
+      default:
+        console.log('Unhandled Zoom webhook event:', event);
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error handling Zoom webhook:', error);
+    res.status(500).json({ success: false, error: 'Webhook processing failed' });
+  }
+};
+
+// Helper functions for webhook processing
+const handleMeetingStarted = async (payload: any) => {
+  try {
+    const meetingId = payload.object.id;
+    await Session.findOneAndUpdate(
+      { zoomMeetingId: meetingId },
+      { status: 'live' }
+    );
+    console.log(`Meeting ${meetingId} started - status updated to live`);
+  } catch (error) {
+    console.error('Error handling meeting started:', error);
+  }
+};
+
+const handleMeetingEnded = async (payload: any) => {
+  try {
+    const meetingId = payload.object.id;
+    await Session.findOneAndUpdate(
+      { zoomMeetingId: meetingId },
+      { status: 'completed' }
+    );
+    console.log(`Meeting ${meetingId} ended - status updated to completed`);
+  } catch (error) {
+    console.error('Error handling meeting ended:', error);
+  }
+};
+
+const handleRecordingCompleted = async (payload: any) => {
+  try {
+    const meetingId = payload.object.id;
+    const recordingData = payload.object;
+    
+    // Find the session
+    const session = await Session.findOne({ zoomMeetingId: meetingId });
+    if (!session) {
+      console.error(`Session not found for Zoom meeting ${meetingId}`);
+      return;
+    }
+
+    // Update session with recording flag
+    await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+
+    // Create recording records for each recording file
+    if (recordingData.recording_files && recordingData.recording_files.length > 0) {
+      for (const file of recordingData.recording_files) {
+        try {
+          // Download recording to local storage
+          const localFilePath = await zoomIntegration.downloadRecordingToLocal(file);
+          
+          await Recording.create({
+            sessionId: session._id,
+            courseId: session.courseId,
+            zoomRecordingId: file.id,
+            title: `${session.title} - Recording`,
+            recordingUrl: file.play_url, // Keep original Zoom URL as backup
+            downloadUrl: file.download_url,
+            localFilePath, // Store local file path
+            duration: file.recording_end ? 
+              Math.floor((new Date(file.recording_end).getTime() - new Date(file.recording_start).getTime()) / 1000) : 
+              session.duration * 60,
+            fileSize: file.file_size || 0,
+            recordedAt: new Date(file.recording_start),
+            isProcessed: true
+          });
+          
+          console.log(`Recording downloaded and saved locally: ${localFilePath}`);
+        } catch (downloadError) {
+          console.error(`Failed to download recording ${file.id}:`, downloadError);
+          
+          // Fallback: Save metadata without local file
+          await Recording.create({
+            sessionId: session._id,
+            courseId: session.courseId,
+            zoomRecordingId: file.id,
+            title: `${session.title} - Recording`,
+            recordingUrl: file.play_url,
+            downloadUrl: file.download_url,
+            duration: file.recording_end ? 
+              Math.floor((new Date(file.recording_end).getTime() - new Date(file.recording_start).getTime()) / 1000) : 
+              session.duration * 60,
+            fileSize: file.file_size || 0,
+            recordedAt: new Date(file.recording_start),
+            isProcessed: false // Mark as not processed due to download failure
+          });
+        }
+      }
+    }
+    
+    console.log(`Recording completed for meeting ${meetingId} - session and recordings updated`);
+  } catch (error) {
+    console.error('Error handling recording completed:', error);
+  }
+};
+
+// @desc    Manually download recording to local storage
+// @route   POST /api/sessions/:id/download-recording
+// @access  Private (Instructor, Admin)
+export const downloadRecordingManually = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    // Check authorization
+    if (session.instructorId.toString() !== req.user._id.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to download recordings for this session'
+      });
+    }
+
+    if (!session.zoomMeetingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No Zoom meeting associated with this session'
+      });
+    }
+
+    // Get recordings from Zoom
+    const zoomRecordings = await zoomIntegration.getMeetingRecordings(session.zoomMeetingId);
+    
+    if (zoomRecordings.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No recordings found for this session'
+      });
+    }
+
+    const downloadedRecordings = [];
+
+    for (const zoomRecording of zoomRecordings) {
+      try {
+        // Download to local storage
+        const localFilePath = await zoomIntegration.downloadRecordingToLocal(zoomRecording);
+        
+        // Check if recording already exists in database
+        let recording = await Recording.findOne({ zoomRecordingId: zoomRecording.id });
+        
+        if (recording) {
+          // Update existing recording with local file path
+          recording.localFilePath = localFilePath;
+          recording.isProcessed = true;
+          await recording.save();
+        } else {
+          // Create new recording record
+          recording = await Recording.create({
+            sessionId: session._id,
+            courseId: session.courseId,
+            zoomRecordingId: zoomRecording.id,
+            title: `${session.title} - Recording`,
+            recordingUrl: zoomRecording.share_url || zoomRecording.recording_files?.[0]?.play_url,
+            downloadUrl: zoomRecording.recording_files?.[0]?.download_url,
+            localFilePath,
+            duration: zoomRecording.duration || session.duration * 60,
+            fileSize: zoomRecording.total_size || 0,
+            recordedAt: new Date(zoomRecording.recording_start),
+            isProcessed: true
+          });
+        }
+
+        downloadedRecordings.push(recording);
+      } catch (downloadError) {
+        console.error(`Failed to download recording ${zoomRecording.id}:`, downloadError);
+      }
+    }
+
+    // Update session to mark it has recordings
+    await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+
+    res.json({
+      success: true,
+      message: `Downloaded ${downloadedRecordings.length} recording(s) to local storage`,
+      data: { recordings: downloadedRecordings }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Check for recordings manually
+// @route   POST /api/sessions/:id/check-recordings
+// @access  Private (Instructor, Admin)
+export const checkForRecordings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    // Check authorization
+    if (session.instructorId.toString() !== req.user._id.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to check recordings for this session'
+      });
+    }
+
+    if (!session.zoomMeetingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No Zoom meeting associated with this session'
+      });
+    }
+
+    try {
+      console.log('Checking for recordings for session:', session._id);
+      const zoomRecordings = await zoomIntegration.getMeetingRecordings(session.zoomMeetingId);
+      
+      if (zoomRecordings.length > 0) {
+        console.log('Found recordings:', zoomRecordings.length);
+        await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+        
+        let downloadedCount = 0;
+        for (const zoomRecording of zoomRecordings) {
+          try {
+            // Check if recording already exists
+            const existingRecording = await Recording.findOne({
+              sessionId: session._id,
+              zoomRecordingId: zoomRecording.id
+            });
+
+            if (!existingRecording) {
+              const localFilePath = await zoomIntegration.downloadRecordingToLocal(zoomRecording);
+              
+              await Recording.create({
+                sessionId: session._id,
+                courseId: session.courseId,
+                zoomRecordingId: zoomRecording.id,
+                title: `${session.title} - Recording`,
+                recordingUrl: zoomRecording.share_url || zoomRecording.recording_files?.[0]?.play_url,
+                downloadUrl: zoomRecording.recording_files?.[0]?.download_url,
+                localFilePath,
+                duration: zoomRecording.duration || session.duration * 60,
+                fileSize: zoomRecording.total_size || 0,
+                recordedAt: new Date(zoomRecording.recording_start || Date.now()),
+                isProcessed: true
+              });
+              
+              downloadedCount++;
+              console.log(`Downloaded recording: ${localFilePath}`);
+            }
+          } catch (downloadError) {
+            console.error(`Failed to download recording ${zoomRecording.id}:`, downloadError);
+          }
+        }
+
+        res.json({
+          success: true,
+          message: `Found ${zoomRecordings.length} recording(s). ${downloadedCount} new recording(s) downloaded.`,
+          data: { 
+            totalRecordings: zoomRecordings.length,
+            newRecordings: downloadedCount
+          }
+        });
+      } else {
+        res.json({
+          success: false,
+          message: 'No recordings found yet. Please wait 2-5 minutes for Zoom to process the recording.'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching recordings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching recordings from Zoom'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
 };

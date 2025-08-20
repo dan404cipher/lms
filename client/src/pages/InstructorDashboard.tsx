@@ -27,21 +27,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import instructorService from "@/services/instructorService";
 
-interface Course {
-  _id: string;
-  title: string;
-  description: string;
-  category: { name: string };
-  courseCode?: string;
-  stats: {
-    enrollments: number;
-    completions: number;
-    averageRating: number;
-    totalRatings: number;
-  };
-  published: boolean;
-  createdAt: string;
-}
+
 
 interface Session {
   _id: string;
@@ -79,7 +65,6 @@ interface Material {
 const InstructorDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -96,14 +81,12 @@ const InstructorDashboard = () => {
     const fetchInstructorData = async () => {
       try {
         setLoading(true);
-        const [coursesResponse, sessionsResponse, assessmentsResponse, materialsResponse] = await Promise.all([
-          instructorService.getMyCourses(),
+        const [sessionsResponse, assessmentsResponse, materialsResponse] = await Promise.all([
           instructorService.getUpcomingSessions(),
           instructorService.getRecentAssessments(),
           instructorService.getRecentMaterials()
         ]);
         
-        setCourses(coursesResponse.data.courses);
         setSessions(sessionsResponse.data.sessions);
         setAssessments(assessmentsResponse.data.assessments);
         setMaterials(materialsResponse.data.materials);
@@ -167,78 +150,7 @@ const InstructorDashboard = () => {
     }
   };
 
-  const getInstructorCourseIcon = (title: string) => {
-    // Generate a consistent icon based on course title
-    const hash = title.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    
-    const iconIndex = Math.abs(hash) % 6;
-    
-    const icons = [
-      // Diamond shapes (instructor style)
-      <svg key="diamonds" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2L15 8L21 12L15 16L12 22L9 16L3 12L9 8L12 2Z"/>
-        <path d="M12 6L13 9L16 10L13 11L12 14L11 11L8 10L11 9L12 6Z"/>
-      </svg>,
-      // Star pattern (instructor style)
-      <svg key="stars" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2L14.5 8.5L21 11L14.5 13.5L12 20L9.5 13.5L3 11L9.5 8.5L12 2Z"/>
-        <circle cx="12" cy="12" r="3" fill="currentColor"/>
-      </svg>,
-      // Zigzag lines (instructor style)
-      <svg key="zigzag" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M3 8L7 4L11 8L15 4L19 8L21 6"/>
-        <path d="M3 16L7 12L11 16L15 12L19 16L21 14"/>
-      </svg>,
-      // Crossed squares (instructor style)
-      <svg key="crossed" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="4" y="4" width="8" height="8" rx="1"/>
-        <rect x="12" y="12" width="8" height="8" rx="1"/>
-        <path d="M4 4L20 20M20 4L4 20" stroke="currentColor" strokeWidth="1"/>
-      </svg>,
-      // Spiral pattern (instructor style)
-      <svg key="spiral" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 12C12 8 16 8 16 12C16 16 12 16 12 12C12 8 8 8 8 12C8 16 12 16 12 12"/>
-      </svg>,
-      // Triangle grid (instructor style)
-      <svg key="triangles" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2L20 18H4L12 2Z"/>
-        <path d="M12 8L16 14H8L12 8Z"/>
-      </svg>
-    ];
-    
-    return icons[iconIndex];
-  };
-
-  const getInstructorCourseColor = (title: string) => {
-    // Generate a consistent color based on course title
-    const hash = title.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    
-    const colorIndex = Math.abs(hash) % 6;
-    
-    const colors = [
-      'bg-purple-500',    // Purple
-      'bg-indigo-500',    // Indigo
-      'bg-pink-500',      // Pink
-      'bg-rose-500',      // Rose
-      'bg-violet-500',    // Violet
-      'bg-fuchsia-500'    // Fuchsia
-    ];
-    
-    return colors[colorIndex];
-  };
-
   // Calculate dashboard stats
-  const totalEnrollments = courses.reduce((sum, course) => sum + course.stats.enrollments, 0);
-  const totalCompletions = courses.reduce((sum, course) => sum + course.stats.completions, 0);
-  const averageRating = courses.length > 0 
-    ? courses.reduce((sum, course) => sum + course.stats.averageRating, 0) / courses.length 
-    : 0;
   const upcomingSessions = sessions.filter(s => s.status === 'scheduled').length;
 
   return (
@@ -253,49 +165,7 @@ const InstructorDashboard = () => {
       </div>
 
       {/* Quick Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <BookOpen className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{courses.length}</p>
-                <p className="text-sm text-muted-foreground">Total Courses</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Users className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalEnrollments}</p>
-                <p className="text-sm text-muted-foreground">Total Enrollments</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Star className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{averageRating.toFixed(1)}</p>
-                <p className="text-sm text-muted-foreground">Avg Rating</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
@@ -309,80 +179,37 @@ const InstructorDashboard = () => {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-4">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FileText className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{assessments.length}</p>
+                <p className="text-sm text-muted-foreground">Active Assessments</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-4">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Upload className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{materials.length}</p>
+                <p className="text-sm text-muted-foreground">Course Materials</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Recent Courses */}
-      <Card className="mb-8">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Courses</CardTitle>
-              <CardDescription>
-                Your latest course activities
-              </CardDescription>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/courses')}>
-              View All
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            </div>
-          ) : courses.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {courses.slice(0, 6).map((course) => (
-                <Card key={course._id} className="hover:shadow-md transition-all duration-200 cursor-pointer border-0 shadow-sm" onClick={() => navigate(`/courses/${course._id}`)}>
-                  <CardContent className="p-4">
-                    <div className="space-y-3">
-                      {/* Icon */}
-                      <div className={`w-10 h-10 rounded-lg ${getInstructorCourseColor(course.title)} flex items-center justify-center text-white flex-shrink-0`}>
-                        {getInstructorCourseIcon(course.title)}
-                      </div>
-                      
-                      {/* Course Title */}
-                      <div>
-                        <h4 className="font-medium text-foreground text-sm line-clamp-2 leading-tight">
-                          {course.title}
-                        </h4>
-                      </div>
-                      
-                      {/* Course Stats */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Students</span>
-                          <span className="font-medium text-blue-600">{course.stats.enrollments}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Rating</span>
-                          <span className="font-medium text-green-600">{course.stats.averageRating.toFixed(1)}★</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Status</span>
-                          <Badge variant={course.published ? "default" : "secondary"} className="text-xs">
-                            {course.published ? 'Published' : 'Draft'}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No courses created yet</p>
-              <Button onClick={() => navigate('/courses/new')} className="mt-2">
-                Create Course
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
 
       {/* Upcoming Sessions and Recent Activities */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -566,35 +393,7 @@ const InstructorDashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Analytics Overview */}
-      <Card className="mt-8">
-        <CardHeader>
-          <CardTitle>Analytics Overview</CardTitle>
-          <CardDescription>
-            Key metrics for your courses
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-primary mb-2">{totalEnrollments}</div>
-              <p className="text-sm text-muted-foreground">Total Enrollments</p>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600 mb-2">{totalCompletions}</div>
-              <p className="text-sm text-muted-foreground">Course Completions</p>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">{averageRating.toFixed(1)}</div>
-              <p className="text-sm text-muted-foreground">Average Rating</p>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-2">{upcomingSessions}</div>
-              <p className="text-sm text-muted-foreground">Upcoming Sessions</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 };

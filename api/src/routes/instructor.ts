@@ -7,6 +7,9 @@ import {
   updateCourse,
   deleteCourse,
   getDashboardStats,
+  getUpcomingSessions,
+  getRecentAssessments,
+  getRecentMaterials,
   createModule,
   updateModule,
   deleteModule,
@@ -35,6 +38,9 @@ router.use(authorize('instructor'));
 
 // Dashboard
 router.get('/dashboard/stats', getDashboardStats);
+router.get('/dashboard/sessions', getUpcomingSessions);
+router.get('/dashboard/assessments', getRecentAssessments);
+router.get('/dashboard/materials', getRecentMaterials);
 
 // Course Management
 router.get('/courses', getMyCourses);

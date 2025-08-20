@@ -97,6 +97,12 @@ const GlobalMessaging = () => {
     } catch (error) {
       console.error('GlobalMessaging - Failed to load connections:', error);
       console.error('GlobalMessaging - Error details:', error.response?.data || error.message);
+      
+      // Handle authentication errors gracefully
+      if (error.response?.status === 401) {
+        console.log('GlobalMessaging - User not authenticated, skipping connection loading');
+        return;
+      }
     } finally {
       setIsLoading(false);
     }
