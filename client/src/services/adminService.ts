@@ -47,10 +47,18 @@ export interface User {
   _id: string;
   name: string;
   email: string;
-  role: string;
-  createdAt: string;
+  role: 'learner' | 'instructor' | 'admin' | 'super_admin';
+  status: 'active' | 'inactive' | 'suspended';
+  credits: number;
+  emailVerified: boolean;
   lastLogin?: string;
-  isActive?: boolean;
+  createdAt: string;
+  profile?: {
+    bio?: string;
+    location?: string;
+    phone?: string;
+    website?: string;
+  };
 }
 
 export interface Course {
@@ -189,7 +197,7 @@ export interface AdminResponse<T = any> {
 
 class AdminService {
   // User Management
-  async getAllUsers(): Promise<AdminResponse<User[]>> {
+  async getAllUsers(): Promise<AdminResponse<{ users: User[]; pagination: any }>> {
     const response = await adminAxios.get('/admin/users');
     return response.data;
   }
@@ -244,6 +252,11 @@ class AdminService {
   // Course Management
   async getAllCourses(): Promise<AdminResponse<Course[]>> {
     const response = await adminAxios.get('/admin/courses');
+    return response.data;
+  }
+
+  async getCategories(): Promise<AdminResponse<any[]>> {
+    const response = await adminAxios.get('/categories');
     return response.data;
   }
 

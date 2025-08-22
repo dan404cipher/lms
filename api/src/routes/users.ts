@@ -31,7 +31,15 @@ const updateUserValidation = [
   body('name').optional().trim().isLength({ min: 2, max: 50 }).withMessage('Name must be between 2 and 50 characters'),
   body('profile.bio').optional().trim().isLength({ max: 500 }).withMessage('Bio cannot exceed 500 characters'),
   body('profile.phone').optional().trim().isMobilePhone('any').withMessage('Invalid phone number'),
-  body('profile.website').optional().trim().isURL().withMessage('Invalid website URL'),
+  body('profile.website').optional().trim().custom((value) => {
+    if (value && value !== '') {
+      const urlPattern = /^https?:\/\/.+/;
+      if (!urlPattern.test(value)) {
+        throw new Error('Invalid website URL');
+      }
+    }
+    return true;
+  }).withMessage('Invalid website URL'),
   body('preferences.language').optional().isLength({ min: 2, max: 5 }).withMessage('Language code must be 2-5 characters'),
   body('preferences.timezone').optional().isLength({ min: 3, max: 50 }).withMessage('Timezone must be between 3 and 50 characters')
 ];

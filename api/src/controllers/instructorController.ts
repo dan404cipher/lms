@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { validationResult } from 'express-validator';
 import { Course } from '../models/Course';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
@@ -10,6 +11,8 @@ import { Enrollment } from '../models/Enrollment';
 import { User } from '../models/User';
 import { uploadFileLocally } from '../utils/fileUpload';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -387,16 +390,45 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
 // Create course
 export const createCourse = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { title, description, categoryId, courseCode, priceCredits, duration } = req.body;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false, 
+        errors: errors.array() 
+      });
+    }
+
+    const { 
+      title, 
+      description, 
+      shortDescription,
+      categoryId, 
+      courseCode, 
+      priceCredits, 
+      duration,
+      difficulty,
+      language,
+      tags,
+      requirements,
+      learningOutcomes,
+      thumbnail
+    } = req.body;
 
     const course = new Course({
       title,
       description,
+      shortDescription,
       categoryId,
       courseCode,
       instructorId: req.user._id,
       priceCredits: priceCredits || 0,
       duration: duration || 0,
+      difficulty: difficulty || 'beginner',
+      language: language || 'en',
+      tags: tags || [],
+      requirements: requirements || [],
+      learningOutcomes: learningOutcomes || [],
+      thumbnail: thumbnail || 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800',
       published: false
     });
 
@@ -437,6 +469,14 @@ export const createCourse = async (req: AuthRequest, res: Response, next: NextFu
 // Update course
 export const updateCourse = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false, 
+        errors: errors.array() 
+      });
+    }
+
     const courseId = req.params.courseId;
     const userId = req.user._id;
 
@@ -1210,6 +1250,95 @@ export const deleteAnnouncement = async (req: AuthRequest, res: Response, next: 
       message: 'Announcement deleted successfully'
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// Upload lesson content (Instructor only)
+export const uploadLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    console.log('uploadLessonContent (instructor) - Starting upload process');
+    const { courseId, moduleId, lessonId } = req.params;
+    const userId = req.user._id;
+    console.log('uploadLessonContent (instructor) - Params:', { courseId, moduleId, lessonId, userId });
+    
+    if (!req.file) {
+      console.log('uploadLessonContent (instructor) - No file uploaded');
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    console.log('uploadLessonContent (instructor) - File received:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
+    // Check if user has permission to access this course
+    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    if (!course) {
+      console.log('uploadLessonContent (instructor) - Course not found or no permission');
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    const lesson = await Lesson.findOne({ _id: lessonId, moduleId });
+    if (!lesson) {
+      console.log('uploadLessonContent (instructor) - Lesson not found');
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    console.log('uploadLessonContent (instructor) - Lesson found, uploading file...');
+
+    // Simple file upload without external utility
+    const fileExtension = req.file.originalname.split('.').pop() || 'file';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+    const folderPath = path.join(__dirname, '../../uploads/lesson-content');
+    
+    // Create folder if it doesn't exist
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+    
+    const filePath = path.join(folderPath, fileName);
+    console.log('uploadLessonContent (instructor) - File path:', filePath);
+    
+    // Write file to disk
+    fs.writeFileSync(filePath, req.file.buffer);
+    console.log('uploadLessonContent (instructor) - File written successfully');
+
+    // Create file object for the lesson
+    const fileObject = {
+      _id: new mongoose.Types.ObjectId().toString(),
+      name: req.file.originalname,
+      url: `/uploads/lesson-content/${fileName}`,
+      type: req.file.mimetype,
+      size: req.file.size
+    };
+
+    console.log('uploadLessonContent (instructor) - File object created:', fileObject);
+
+    // Add file to lesson's files array
+    lesson.files.push(fileObject);
+    await lesson.save();
+
+    console.log('uploadLessonContent (instructor) - Lesson saved successfully');
+
+    res.json({
+      success: true,
+      message: 'File uploaded successfully',
+      data: { file: fileObject }
+    });
+  } catch (error) {
+    console.error('uploadLessonContent (instructor) - Error:', error);
+    console.error('uploadLessonContent (instructor) - Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     next(error);
   }
 };

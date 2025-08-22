@@ -1,7 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import { protect, authorize } from '../middleware/auth';
-import { upload } from '../middleware/upload';
+import { upload, handleMulterError } from '../middleware/upload';
 import {
   getAllUsers,
   getUserById,
@@ -55,7 +55,15 @@ const userValidation = [
   body('bio').optional().trim().isLength({ max: 500 }).withMessage('Bio cannot exceed 500 characters'),
   body('location').optional().trim().isLength({ max: 100 }).withMessage('Location cannot exceed 100 characters'),
   body('phone').optional().trim().isLength({ max: 20 }).withMessage('Phone cannot exceed 20 characters'),
-  body('website').optional().trim().isURL().withMessage('Please enter a valid website URL')
+  body('website').optional().trim().custom((value) => {
+    if (value && value !== '') {
+      const urlPattern = /^https?:\/\/.+/;
+      if (!urlPattern.test(value)) {
+        throw new Error('Please enter a valid website URL');
+      }
+    }
+    return true;
+  }).withMessage('Please enter a valid website URL')
 ];
 
 const updateUserValidation = [
@@ -67,7 +75,15 @@ const updateUserValidation = [
   body('bio').optional().trim().isLength({ max: 500 }).withMessage('Bio cannot exceed 500 characters'),
   body('location').optional().trim().isLength({ max: 100 }).withMessage('Location cannot exceed 100 characters'),
   body('phone').optional().trim().isLength({ max: 20 }).withMessage('Phone cannot exceed 20 characters'),
-  body('website').optional().trim().isURL().withMessage('Please enter a valid website URL')
+  body('website').optional().trim().custom((value) => {
+    if (value && value !== '') {
+      const urlPattern = /^https?:\/\/.+/;
+      if (!urlPattern.test(value)) {
+        throw new Error('Please enter a valid website URL');
+      }
+    }
+    return true;
+  }).withMessage('Please enter a valid website URL')
 ];
 
 const courseStatusValidation = [
@@ -76,14 +92,19 @@ const courseStatusValidation = [
 
 const courseValidation = [
   body('title').trim().isLength({ min: 3, max: 100 }).withMessage('Title must be between 3 and 100 characters'),
-  body('description').trim().isLength({ min: 10, max: 1000 }).withMessage('Description must be between 10 and 1000 characters'),
-  body('shortDescription').optional().trim().isLength({ min: 5, max: 200 }).withMessage('Short description must be between 5 and 200 characters'),
+  body('description').trim().isLength({ min: 10, max: 2000 }).withMessage('Description must be between 10 and 2000 characters'),
+  body('shortDescription').trim().isLength({ min: 10, max: 200 }).withMessage('Short description must be between 10 and 200 characters'),
   body('categoryId').isMongoId().withMessage('Valid category ID is required'),
   body('instructorId').isMongoId().withMessage('Valid instructor ID is required'),
   body('courseCode').optional().trim().isLength({ min: 2, max: 20 }).withMessage('Course code must be between 2 and 20 characters'),
   body('priceCredits').optional().isInt({ min: 0 }).withMessage('Price credits must be a non-negative integer'),
   body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']).withMessage('Difficulty must be beginner, intermediate, or advanced'),
-  body('duration').optional().isInt({ min: 0 }).withMessage('Duration must be a non-negative integer')
+  body('duration').isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
+  body('language').optional().isLength({ min: 2, max: 5 }).withMessage('Language code must be 2-5 characters'),
+  body('tags').optional().isArray().withMessage('Tags must be an array'),
+  body('requirements').optional().isArray().withMessage('Requirements must be an array'),
+  body('learningOutcomes').optional().isArray().withMessage('Learning outcomes must be an array'),
+  body('thumbnail').optional().isURL().withMessage('Thumbnail must be a valid URL')
 ];
 
 const notificationValidation = [
@@ -120,7 +141,7 @@ router.post('/courses/:courseId/modules/:moduleId/lessons', createLesson);
 router.post('/courses/:courseId/assessments', createAssessment);
 router.post('/courses/:courseId/announcements', createAnnouncement);
 router.post('/courses/:courseId/materials', upload.single('material'), uploadMaterial);
-router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), uploadLessonContent);
+router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 
 // System Statistics Routes
 router.get('/stats', getSystemStats);

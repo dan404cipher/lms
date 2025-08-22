@@ -18,6 +18,8 @@ import UnifiedCourseDetail from "./pages/UnifiedCourseDetail";
 import LessonViewer from "./pages/LessonViewer";
 import Activity from "./pages/Activity";
 import UserManagement from "./pages/UserManagement";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +50,10 @@ const App = () => (
                 {/* Admin Routes */}
                 <Route path="/admin/dashboard" element={<Layout><AdminDashboard /></Layout>} />
                 <Route path="/admin/users" element={<Layout><UserManagement /></Layout>} />
+                
+                {/* User Routes */}
+                <Route path="/profile" element={<Layout><Profile /></Layout>} />
+                <Route path="/settings" element={<Layout><Settings /></Layout>} />
                 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<Layout><NotFound /></Layout>} />

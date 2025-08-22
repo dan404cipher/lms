@@ -11,25 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Search, Filter, Loader2, Eye, EyeOff } from "lucide-react";
-import adminService from "@/services/adminService";
-
-interface User {
-  _id: string;
-  name: string;
-  email: string;
-  role: 'learner' | 'instructor' | 'admin' | 'super_admin';
-  status: 'active' | 'inactive' | 'suspended';
-  credits: number;
-  emailVerified: boolean;
-  lastLogin?: string;
-  createdAt: string;
-  profile?: {
-    bio?: string;
-    location?: string;
-    phone?: string;
-    website?: string;
-  };
-}
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import adminService, { User } from "@/services/adminService";
 
 const UserManagement = () => {
   const { user } = useAuth();
@@ -51,8 +34,8 @@ const UserManagement = () => {
     name: '',
     email: '',
     password: '',
-    role: 'learner' as const,
-    status: 'active' as const,
+    role: 'learner' as 'learner' | 'instructor' | 'admin' | 'super_admin',
+    status: 'active' as 'active' | 'inactive' | 'suspended',
     credits: 0,
     bio: '',
     location: '',
@@ -109,6 +92,7 @@ const UserManagement = () => {
 
     try {
       setIsSubmitting(true);
+      console.log('Creating user with data:', formData);
       const response = await adminService.createUser(formData);
       
       if (response.success) {
@@ -244,7 +228,7 @@ const UserManagement = () => {
       case 'super_admin': return 'bg-red-500';
       case 'admin': return 'bg-purple-500';
       case 'instructor': return 'bg-blue-500';
-      case 'learner': return 'bg-green-500';
+      case 'learner': return 'bg-orange-500';
       default: return 'bg-gray-500';
     }
   };
@@ -358,12 +342,6 @@ const UserManagement = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2 mb-1">
                       <h3 className="font-semibold text-foreground truncate">{user.name}</h3>
-                      <Badge className={getRoleColor(user.role)}>
-                        {user.role.replace('_', ' ')}
-                      </Badge>
-                      <Badge className={getStatusColor(user.status)}>
-                        {user.status}
-                      </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mb-1">{user.email}</p>
                     <div className="flex items-center space-x-4 text-xs text-muted-foreground">
@@ -382,24 +360,49 @@ const UserManagement = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2 flex-shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEditModal(user)}
-                  >
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
+                  <div className="flex flex-col space-y-1 mr-2">
+                    <Badge className={getRoleColor(user.role)}>
+                      {user.role.replace('_', ' ')}
+                    </Badge>
+                    <Badge className={getStatusColor(user.status)}>
+                      {user.status}
+                    </Badge>
+                  </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditModal(user)}
+                          className="h-8 w-8 p-0"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit user</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   {user.role !== 'super_admin' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openDeleteModal(user)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Delete
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openDeleteModal(user)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Delete user</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
               </div>

@@ -50,6 +50,11 @@ const instructorService = {
     return response.data;
   },
 
+  async getCategories() {
+    const response = await instructorAxios.get('/categories');
+    return response.data;
+  },
+
   async getCourseDetail(courseId: string) {
     const response = await instructorAxios.get(`/instructor/courses/${courseId}`);
     return response.data;
@@ -103,7 +108,7 @@ const instructorService = {
   },
 
   async uploadLessonContent(courseId: string, moduleId: string, lessonId: string, formData: FormData) {
-    const response = await instructorAxios.post(`/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content`, formData, {
+    const response = await instructorAxios.post(`/instructor/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

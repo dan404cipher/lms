@@ -595,12 +595,23 @@ const UnifiedCourseDetail = () => {
           });
           break;
         case 'material':
-          // For materials, show a message that this feature is coming soon
-          toast({
-            title: "Coming Soon",
-            description: "File upload functionality will be available in a future update.",
-          });
-          return; // Don't proceed with the rest of the function
+          if (!selectedFiles || selectedFiles.length === 0) {
+            toast({
+              title: "Error",
+              description: "Please select a file to upload.",
+              variant: "destructive",
+            });
+            return;
+          }
+          
+          // Create FormData for file upload
+          const materialFormData = new FormData();
+          materialFormData.append('title', formData.title);
+          materialFormData.append('description', formData.description || '');
+          materialFormData.append('material', selectedFiles[0]);
+          
+          await service.uploadMaterial(courseId, materialFormData);
+          break;
         case 'lesson':
           if (!selectedModuleId) {
             toast({
@@ -655,6 +666,7 @@ const UnifiedCourseDetail = () => {
       });
       setShowAddForm(null);
       setSelectedModuleId(null);
+      setSelectedFiles(null);
     } catch (error: any) {
       console.error('Error creating item:', error);
       let errorMessage = "Failed to create item. Please try again.";
@@ -718,7 +730,7 @@ const UnifiedCourseDetail = () => {
           <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">Course Not Found</h2>
           <p className="text-muted-foreground mb-4">The course you're looking for doesn't exist or you don't have access to it.</p>
-          <Button onClick={() => navigate('/courses')}>Back to Courses</Button>
+                      <Button size="sm" onClick={() => navigate('/courses')}>Back to Courses</Button>
         </div>
       </div>
     );
@@ -756,9 +768,9 @@ const UnifiedCourseDetail = () => {
           </div>
           <div className="flex items-center gap-2">
 
-            {(isInstructor || isAdmin) && (
-              <Button onClick={() => addButtonAction === 'session' ? setIsScheduleModalOpen(true) : setShowAddForm(addButtonAction)}>
-                <Plus className="h-4 w-4 mr-2" />
+            {(isInstructor || isAdmin) && activeTab !== 'overview' && (
+              <Button size="sm" onClick={() => addButtonAction === 'session' ? setIsScheduleModalOpen(true) : setShowAddForm(addButtonAction)}>
+                <Plus className="h-3 w-3 mr-1" />
                 {addButtonText}
               </Button>
             )}
@@ -1051,7 +1063,7 @@ const UnifiedCourseDetail = () => {
                                 }}
                                 className="w-full"
                               >
-                                <Plus className="h-4 w-4 mr-2" />
+                                <Plus className="h-3 w-3 mr-1" />
                                 Add Files
                               </Button>
                             </div>
@@ -1081,16 +1093,6 @@ const UnifiedCourseDetail = () => {
                   <Download className="h-5 w-5" />
                   <span>Course Materials</span>
                 </CardTitle>
-                {(isInstructor || isAdmin) && (
-                  <Button
-                    onClick={() => handleUploadMaterial()}
-                    size="sm"
-                    className="flex items-center gap-2"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Upload Material
-                  </Button>
-                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -1356,12 +1358,14 @@ const UnifiedCourseDetail = () => {
                     </p>
                     <div className="flex items-center space-x-2">
                       <Button
+                        size="sm"
                         variant="outline"
                         onClick={() => setSelectedUsers([])}
                       >
                         Clear Selection
                       </Button>
                       <Button
+                        size="sm"
                         onClick={() => addStudentsToCourse(selectedUsers)}
                       >
                         Add {selectedUsers.length} User{selectedUsers.length !== 1 ? 's' : ''} to Course
@@ -1400,6 +1404,7 @@ const UnifiedCourseDetail = () => {
                         </p>
                       </div>
                       <Button 
+                        size="sm"
                         variant={course.published ? "outline" : "default"}
                         onClick={async () => {
                           try {
@@ -1782,12 +1787,26 @@ const UnifiedCourseDetail = () => {
 
             {showAddForm === 'material' && (
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">
-                  File Upload
+                <Label htmlFor="materialFile" className="text-right">
+                  File
                 </Label>
-                <div className="col-span-3 text-sm text-muted-foreground">
-                  File upload functionality will be implemented in a future update.
-                  For now, please use the course management interface.
+                <div className="col-span-3">
+                  <Input
+                    id="materialFile"
+                    type="file"
+                    accept="*/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setSelectedFiles([file]);
+                        console.log('Material file selected:', file);
+                      }
+                    }}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select a file to upload. All file types are accepted.
+                  </p>
                 </div>
               </div>
             )}
@@ -1828,13 +1847,13 @@ const UnifiedCourseDetail = () => {
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => {
+            <Button size="sm" variant="outline" onClick={() => {
               setShowAddForm(null);
               setSelectedModuleId(null);
             }}>
               Cancel
             </Button>
-            <Button onClick={handleFormSubmit} disabled={isSubmitting || !formData.title.trim()}>
+            <Button size="sm" onClick={handleFormSubmit} disabled={isSubmitting || !formData.title.trim()}>
               {isSubmitting ? 'Creating...' : 'Create'}
             </Button>
           </div>
@@ -1914,14 +1933,14 @@ const UnifiedCourseDetail = () => {
           </div>
 
           <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => {
+            <Button size="sm" variant="outline" onClick={() => {
               setShowFileUpload(false);
               setSelectedLessonId(null);
               setSelectedModuleId(null);
             }}>
               Cancel
             </Button>
-            <Button disabled={isSubmitting} onClick={async () => {
+            <Button size="sm" disabled={isSubmitting} onClick={async () => {
               if (!selectedLessonId && !formData.title.trim()) {
                 toast({
                   title: "Error",

@@ -60,7 +60,12 @@ const Courses = () => {
     courseCode: '',
     priceCredits: 0,
     difficulty: 'beginner',
-    duration: 0
+    duration: 0,
+    language: 'en',
+    tags: [],
+    requirements: [],
+    learningOutcomes: [],
+    thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800' // Default thumbnail
   });
 
   const getCourseIcon = (title: string, iconColor?: string) => {
@@ -162,55 +167,61 @@ const Courses = () => {
 
 
   useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setLoading(true);
-        console.log('fetchCourses - User role:', user?.role, 'User ID:', user?._id);
-        let response;
-        
-        if (user?.role === 'admin') {
-          // For admins, get all courses in the system
-          response = await adminService.getAllCourses();
-          console.log('Admin courses response:', response);
-          setCourses(response.data.courses || []);
-        } else if (user?.role === 'instructor') {
-          // For instructors, get courses they are assigned to teach
-          response = await instructorService.getMyCourses();
-          console.log('Instructor courses response:', response);
-          setCourses(response.data.courses || []);
-        } else {
-          // For learners, get courses they are enrolled in
-          response = await courseService.getMyCourses();
-          console.log('Learner courses response:', response);
-          setCourses(response.data.courses || []);
-        }
-      } catch (error) {
-        console.error('Error fetching courses:', error);
-        // Fallback to empty array if API fails
-        setCourses([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCourses();
   }, [user?.role, user?._id]);
 
   // Load categories and instructors for course creation
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (user?.role === 'admin' || user?.role === 'instructor') {
       loadCategoriesAndInstructors();
     }
   }, [user?.role]);
 
+  const fetchCourses = async () => {
+    try {
+      setLoading(true);
+      console.log('fetchCourses - User role:', user?.role, 'User ID:', user?._id);
+      let response;
+      
+      if (user?.role === 'admin') {
+        // For admins, get all courses in the system
+        response = await adminService.getAllCourses();
+        console.log('Admin courses response:', response);
+        setCourses(response.data.courses || []);
+      } else if (user?.role === 'instructor') {
+        // For instructors, get courses they are assigned to teach
+        response = await instructorService.getMyCourses();
+        console.log('Instructor courses response:', response);
+        setCourses(response.data.courses || []);
+      } else {
+        // For learners, get courses they are enrolled in
+        response = await courseService.getMyCourses();
+        console.log('Learner courses response:', response);
+        setCourses(response.data.courses || []);
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      // Fallback to empty array if API fails
+      setCourses([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadCategoriesAndInstructors = async () => {
     try {
       // Load categories and instructors for the create course form
-      // You might need to add these endpoints to your admin service
-      const [categoriesResponse, instructorsResponse] = await Promise.all([
-        adminService.getCategories?.() || Promise.resolve({ data: { categories: [] } }),
-        adminService.getAllUsers?.() || Promise.resolve({ data: { users: [] } })
-      ]);
+      let categoriesResponse, instructorsResponse;
+      
+      if (user?.role === 'admin') {
+        [categoriesResponse, instructorsResponse] = await Promise.all([
+          adminService.getCategories(),
+          adminService.getAllUsers()
+        ]);
+      } else if (user?.role === 'instructor') {
+        categoriesResponse = await instructorService.getCategories();
+        instructorsResponse = { data: { users: [] } }; // Instructors don't need to select other instructors
+      }
       
       setCategories(categoriesResponse.data?.categories || []);
       setInstructors(instructorsResponse.data?.users?.filter((user: any) => user.role === 'instructor') || []);
@@ -222,10 +233,20 @@ const Courses = () => {
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.description || !formData.categoryId || !formData.instructorId) {
+    if (!formData.title || !formData.description || !formData.shortDescription || !formData.categoryId || formData.duration < 1) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields.",
+        description: "Please fill in all required fields and ensure duration is at least 1 minute.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // For instructors, instructorId is not required as they are creating the course for themselves
+    if (user?.role === 'admin' && !formData.instructorId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select an instructor.",
         variant: "destructive"
       });
       return;
@@ -233,7 +254,15 @@ const Courses = () => {
 
     try {
       setIsCreating(true);
-      const response = await adminService.createCourse(formData);
+      let response;
+      
+      if (user?.role === 'admin') {
+        response = await adminService.createCourse(formData);
+      } else if (user?.role === 'instructor') {
+        // For instructors, remove instructorId as they are creating the course for themselves
+        const { instructorId, ...courseData } = formData;
+        response = await instructorService.createCourse(courseData);
+      }
       
       if (response.success) {
         toast({
@@ -250,16 +279,32 @@ const Courses = () => {
           courseCode: '',
           priceCredits: 0,
           difficulty: 'beginner',
-          duration: 0
+          duration: 0,
+          language: 'en',
+          tags: [],
+          requirements: [],
+          learningOutcomes: [],
+          thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800'
         });
         // Refresh courses list
         fetchCourses();
       }
     } catch (error: any) {
       console.error('Error creating course:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      console.error('Form data sent:', formData);
+      
+      let errorMessage = "Failed to create course. Please try again.";
+      if (error.response?.data?.errors) {
+        errorMessage = error.response.data.errors.map((err: any) => err.msg).join(', ');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       toast({
         title: "Error",
-        description: error.response?.data?.message || "Failed to create course. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -290,7 +335,7 @@ const Courses = () => {
             {user?.role === 'admin' ? 'All Courses' : user?.role === 'instructor' ? 'My Teaching Courses' : 'Active Courses'}
           </h1>
           
-          {user?.role === 'admin' && (
+          {(user?.role === 'admin' || user?.role === 'instructor') && (
             <Button onClick={() => setShowCreateModal(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Course
@@ -411,12 +456,13 @@ const Courses = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="shortDescription">Short Description</Label>
+                  <Label htmlFor="shortDescription">Short Description *</Label>
                   <Input
                     id="shortDescription"
                     value={formData.shortDescription}
                     onChange={(e) => handleInputChange('shortDescription', e.target.value)}
-                    placeholder="Brief course overview"
+                    placeholder="Brief course overview (10-200 characters)"
+                    required
                   />
                 </div>
 
@@ -437,21 +483,23 @@ const Courses = () => {
                     </Select>
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="instructor">Instructor *</Label>
-                    <Select value={formData.instructorId} onValueChange={(value) => handleInputChange('instructorId', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select instructor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {instructors.map((instructor) => (
-                          <SelectItem key={instructor._id} value={instructor._id}>
-                            {instructor.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {user?.role === 'admin' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="instructor">Instructor *</Label>
+                      <Select value={formData.instructorId} onValueChange={(value) => handleInputChange('instructorId', value)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select instructor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {instructors.map((instructor) => (
+                            <SelectItem key={instructor._id} value={instructor._id}>
+                              {instructor.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -470,14 +518,15 @@ const Courses = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (hours)</Label>
+                    <Label htmlFor="duration">Duration (minutes) *</Label>
                     <Input
                       id="duration"
                       type="number"
                       value={formData.duration}
                       onChange={(e) => handleInputChange('duration', parseInt(e.target.value) || 0)}
                       placeholder="0"
-                      min="0"
+                      min="1"
+                      required
                     />
                   </div>
                   

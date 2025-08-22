@@ -1,6 +1,7 @@
 import express from 'express';
+import { body } from 'express-validator';
 import { protect, authorize } from '../middleware/auth';
-import { upload } from '../middleware/upload';
+import { upload, handleMulterError } from '../middleware/upload';
 import {
   getMyCourses,
   getCourseDetail,
@@ -28,10 +29,26 @@ import {
   deleteMaterial,
   createAnnouncement,
   updateAnnouncement,
-  deleteAnnouncement
+  deleteAnnouncement,
+  uploadLessonContent
 } from '../controllers/instructorController';
 
 const router = express.Router();
+
+// Validation middleware
+const courseValidation = [
+  body('title').trim().isLength({ min: 3, max: 100 }).withMessage('Title must be between 3 and 100 characters'),
+  body('description').trim().isLength({ min: 10, max: 2000 }).withMessage('Description must be between 10 and 2000 characters'),
+  body('shortDescription').trim().isLength({ min: 10, max: 200 }).withMessage('Short description must be between 10 and 200 characters'),
+  body('categoryId').isMongoId().withMessage('Valid category ID is required'),
+  body('priceCredits').isInt({ min: 0 }).withMessage('Price credits must be a non-negative integer'),
+  body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']).withMessage('Invalid difficulty level'),
+  body('language').optional().isLength({ min: 2, max: 5 }).withMessage('Language code must be 2-5 characters'),
+  body('tags').optional().isArray().withMessage('Tags must be an array'),
+  body('requirements').optional().isArray().withMessage('Requirements must be an array'),
+  body('learningOutcomes').optional().isArray().withMessage('Learning outcomes must be an array'),
+  body('duration').isInt({ min: 1 }).withMessage('Duration must be at least 1 minute')
+];
 
 // Apply authentication and authorization middleware to all routes
 router.use(protect);
@@ -45,9 +62,9 @@ router.get('/dashboard/materials', getRecentMaterials);
 
 // Course Management
 router.get('/courses', getMyCourses);
-router.post('/courses', createCourse);
+router.post('/courses', courseValidation, createCourse);
 router.get('/courses/:courseId', getCourseDetail);
-router.put('/courses/:courseId', updateCourse);
+router.put('/courses/:courseId', courseValidation, updateCourse);
 router.delete('/courses/:courseId', deleteCourse);
 
 // Module Management
@@ -59,6 +76,7 @@ router.delete('/courses/:courseId/modules/:moduleId', deleteModule);
 router.post('/courses/:courseId/modules/:moduleId/lessons', createLesson);
 router.put('/courses/:courseId/modules/:moduleId/lessons/:lessonId', updateLesson);
 router.delete('/courses/:courseId/modules/:moduleId/lessons/:lessonId', deleteLesson);
+router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 
 // Session Management
 router.post('/courses/:courseId/sessions', createSession);

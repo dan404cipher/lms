@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BookOpen, User, Menu, X, Search, LogOut, LayoutDashboard, GraduationCap, Activity, Users, Settings } from "lucide-react";
+import { User, Menu, X, Search, LogOut, LayoutDashboard, GraduationCap, Activity, Users, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 
@@ -39,13 +39,7 @@ const Navbar = memo(() => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <motion.div
-              animate={{ rotate: [0, 5, -5, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <BookOpen className="h-8 w-8 text-primary" />
-            </motion.div>
-            <span className="text-xl font-bold text-primary">
+            <span className="text-xl font-semibold text-primary">
               Axess Upskill
             </span>
           </motion.div>

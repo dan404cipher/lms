@@ -432,40 +432,39 @@ const LessonViewer = () => {
                         onClick={() => setActiveTab('learning')}
                         className={`flex-1 p-2 rounded-lg border transition-all duration-200 flex items-center justify-center ${
                           activeTab === 'learning'
-                            ? 'border-green-500 bg-green-50 dark:bg-green-950 shadow-sm'
+                            ? 'border-primary bg-primary/10 shadow-sm'
                             : 'border-border hover:bg-muted'
                         }`}
-                        title="Learning Progress"
+                        title="Progress"
                       >
-                        <BookOpen className={`h-4 w-4 ${
-                          activeTab === 'learning' ? 'text-green-600' : 'text-muted-foreground'
-                        }`} />
+                        <span className={`text-sm font-medium ${
+                          activeTab === 'learning' ? 'text-primary' : 'text-muted-foreground'
+                        }`}>
+                          Learning
+                        </span>
                       </button>
                       
                       <button
                         onClick={() => setActiveTab('notes')}
                         className={`flex-1 p-2 rounded-lg border transition-all duration-200 flex items-center justify-center ${
                           activeTab === 'notes'
-                            ? 'border-green-500 bg-green-50 dark:bg-green-950 shadow-sm'
+                            ? 'border-primary bg-primary/10 shadow-sm'
                             : 'border-border hover:bg-muted'
                         }`}
                         title="My Notes"
                       >
-                        <StickyNote className={`h-4 w-4 ${
-                          activeTab === 'notes' ? 'text-green-600' : 'text-muted-foreground'
-                        }`} />
+                        <span className={`text-sm font-medium ${
+                          activeTab === 'notes' ? 'text-primary' : 'text-muted-foreground'
+                        }`}>
+                          Notes
+                        </span>
                       </button>
                     </div>
                   </div>
 
                   {activeTab === 'learning' ? (
                     <div className="flex flex-col flex-1 min-h-0">
-                      <div className="flex-shrink-0 mb-4">
-                        <h3 className="text-sm font-semibold flex items-center">
-                          <BookOpen className="h-4 w-4 mr-2" />
-                          Learning Progress
-                        </h3>
-                      </div>
+
 
                       {/* Progress */}
                       <div className="flex-shrink-0 mb-4 p-3 bg-muted/20 rounded-lg">
@@ -529,12 +528,7 @@ const LessonViewer = () => {
                     </div>
                   ) : (
                     <div className="flex flex-col flex-1 min-h-0">
-                      <div className="flex-shrink-0 mb-4">
-                        <h4 className="text-sm font-semibold flex items-center">
-                          <StickyNote className="h-4 w-4 mr-2" />
-                          My Notes
-                        </h4>
-                      </div>
+
                       <div className="flex-1 flex flex-col min-h-0">
                         <Textarea
                           placeholder="Take notes while learning..."
@@ -544,7 +538,7 @@ const LessonViewer = () => {
                             setNotes(newNotes);
                             saveNotesToStorage(newNotes);
                           }}
-                          className="flex-1 min-h-0 text-xs resize-none border-muted-foreground"
+                          className="flex-1 min-h-0 text-xs resize-none border-muted-foreground focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-muted-foreground"
                         />
                         <div className="flex justify-between items-center mt-3 pt-3 border-t flex-shrink-0">
                           <span className="text-xs text-muted-foreground">

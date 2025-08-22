@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
+import mongoose from 'mongoose';
 import { User } from '../models/User';
 import { Course } from '../models/Course';
 import { Category } from '../models/Category';
@@ -10,6 +11,7 @@ import { Assessment } from '../models/Assessment';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { Announcement } from '../models/Announcement';
+import { uploadFileLocally } from '../utils/fileUpload';
 import fs from 'fs';
 import path from 'path';
 
@@ -274,7 +276,12 @@ export const createCourse = async (req: AuthRequest, res: Response, next: NextFu
       courseCode,
       priceCredits = 0,
       difficulty = 'beginner',
-      duration = 0
+      duration = 0,
+      language = 'en',
+      tags = [],
+      requirements = [],
+      learningOutcomes = [],
+      thumbnail = 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800'
     } = req.body;
 
     // Validate required fields
@@ -314,6 +321,11 @@ export const createCourse = async (req: AuthRequest, res: Response, next: NextFu
       priceCredits,
       difficulty,
       duration,
+      language,
+      tags,
+      requirements,
+      learningOutcomes,
+      thumbnail,
       published: false, // Start as draft
       createdBy: req.user?._id
     });
@@ -1326,30 +1338,89 @@ export const uploadMaterial = async (req: AuthRequest, res: Response, next: Next
 // @access  Private (Admin)
 export const uploadLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    console.log('uploadLessonContent - Starting upload process');
     const { courseId, moduleId, lessonId } = req.params;
+    console.log('uploadLessonContent - Params:', { courseId, moduleId, lessonId });
     
     if (!req.file) {
+      console.log('uploadLessonContent - No file uploaded');
       return res.status(400).json({
         success: false,
         message: 'No file uploaded'
       });
     }
 
+    console.log('uploadLessonContent - File received:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
     const lesson = await Lesson.findOne({ _id: lessonId, moduleId });
     if (!lesson) {
+      console.log('uploadLessonContent - Lesson not found');
       return res.status(404).json({
         success: false,
         message: 'Lesson not found'
       });
     }
 
-    // Add file to lesson (this would need to be implemented based on your lesson model structure)
-    // For now, we'll just return success
+    console.log('uploadLessonContent - Lesson found, uploading file...');
+
+    // Simple file upload without external utility
+    const fileExtension = req.file.originalname.split('.').pop() || 'file';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+    const folderPath = path.join(__dirname, '../../uploads/lesson-content');
+    
+    console.log('uploadLessonContent - Folder path:', folderPath);
+    
+    // Create folder if it doesn't exist
+    if (!fs.existsSync(folderPath)) {
+      console.log('uploadLessonContent - Creating folder:', folderPath);
+      fs.mkdirSync(folderPath, { recursive: true });
+    }
+    
+    const filePath = path.join(folderPath, fileName);
+    console.log('uploadLessonContent - File path:', filePath);
+    
+    // Write file to disk
+    console.log('uploadLessonContent - Writing file to disk...');
+    fs.writeFileSync(filePath, req.file.buffer);
+    console.log('uploadLessonContent - File written successfully');
+
+    // Create file object for the lesson
+    const fileObject = {
+      _id: new mongoose.Types.ObjectId().toString(),
+      name: req.file.originalname,
+      url: `/uploads/lesson-content/${fileName}`,
+      type: req.file.mimetype,
+      size: req.file.size
+    };
+
+    console.log('uploadLessonContent - File object created:', fileObject);
+
+    // Add file to lesson's files array
+    console.log('uploadLessonContent - Adding file to lesson...');
+    lesson.files.push(fileObject);
+    await lesson.save();
+
+    console.log('uploadLessonContent - Lesson saved successfully');
+
     res.json({
       success: true,
-      message: 'File uploaded successfully'
+      message: 'File uploaded successfully',
+      data: { file: fileObject }
     });
   } catch (error) {
-    next(error);
+    console.error('uploadLessonContent - Error:', error);
+    console.error('uploadLessonContent - Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('uploadLessonContent - Error message:', error instanceof Error ? error.message : 'No message');
+    
+    // Send a more detailed error response
+    return res.status(500).json({
+      success: false,
+      message: 'File upload failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 };

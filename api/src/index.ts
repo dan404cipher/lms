@@ -30,6 +30,7 @@ import authRoutes from './routes/auth';
 import courseRoutes from './routes/courses';
 import userRoutes from './routes/users';
 import sessionRoutes from './routes/sessions';
+import categoryRoutes from './routes/categories';
 
 import chatRoutes from './routes/chat';
 import connectionRoutes from './routes/connections';
@@ -91,6 +92,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/categories', categoryRoutes);
 
 app.use('/api/chat', chatRoutes);
 app.use('/api/connections', connectionRoutes);

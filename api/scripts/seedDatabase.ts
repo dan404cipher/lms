@@ -162,9 +162,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800',
     priceCredits: 0,
     difficulty: 'beginner',
-    duration: 2, // hours
+    duration: 120, // minutes
     published: true,
-    courseCode: null
+    courseCode: 'PROG001',
+    language: 'en',
+    tags: ['overview', 'introduction', 'program'],
+    requirements: ['Basic computer literacy', 'Interest in learning'],
+    learningOutcomes: ['Understand program structure', 'Know learning objectives', 'Get familiar with platform']
   },
   {
     title: '21CSC569T Fundamentals of Artificial Intelligence',
@@ -173,9 +177,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800',
     priceCredits: 0,
     difficulty: 'intermediate',
-    duration: 40,
+    duration: 2400, // minutes
     published: true,
-    courseCode: '21CSC569T'
+    courseCode: '21CSC569T',
+    language: 'en',
+    tags: ['AI', 'artificial intelligence', 'fundamentals'],
+    requirements: ['Basic programming knowledge', 'Mathematics background', 'Python familiarity'],
+    learningOutcomes: ['Understand AI concepts', 'Learn AI principles', 'Apply AI techniques']
   },
   {
     title: '21CSC529T Inferential Statistics',
@@ -184,9 +192,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
     priceCredits: 0,
     difficulty: 'intermediate',
-    duration: 35,
+    duration: 2100, // minutes
     published: true,
-    courseCode: '21CSC529T'
+    courseCode: '21CSC529T',
+    language: 'en',
+    tags: ['statistics', 'inference', 'data analysis'],
+    requirements: ['Basic statistics knowledge', 'Mathematics background', 'R programming'],
+    learningOutcomes: ['Master statistical inference', 'Apply statistical methods', 'Interpret results']
   },
   {
     title: '21CSC555J Machine Learning Algorithm',
@@ -195,9 +207,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800',
     priceCredits: 0,
     difficulty: 'advanced',
-    duration: 45,
+    duration: 2700, // minutes
     published: true,
-    courseCode: '21CSC555J'
+    courseCode: '21CSC555J',
+    language: 'en',
+    tags: ['machine learning', 'algorithms', 'AI'],
+    requirements: ['Strong programming skills', 'Mathematics background', 'Python expertise'],
+    learningOutcomes: ['Implement ML algorithms', 'Understand ML concepts', 'Build ML models']
   },
   {
     title: '21IPC501J Research Methodology & Publication Ethics',
@@ -206,9 +222,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800',
     priceCredits: 0,
     difficulty: 'intermediate',
-    duration: 30,
+    duration: 1800, // minutes
     published: true,
-    courseCode: '21IPC501J'
+    courseCode: '21IPC501J',
+    language: 'en',
+    tags: ['research', 'methodology', 'ethics'],
+    requirements: ['Academic background', 'Research interest', 'Writing skills'],
+    learningOutcomes: ['Understand research methods', 'Learn publication ethics', 'Write research papers']
   },
   {
     title: 'Pre Work',
@@ -217,9 +237,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800',
     priceCredits: 0,
     difficulty: 'beginner',
-    duration: 5,
+    duration: 300, // minutes
     published: true,
-    courseCode: null
+    courseCode: 'PREP001',
+    language: 'en',
+    tags: ['preparation', 'setup', 'introduction'],
+    requirements: ['Computer access', 'Internet connection', 'Basic software'],
+    learningOutcomes: ['Set up development environment', 'Install required software', 'Prepare for program']
   },
   // Additional courses for instructors
   {
@@ -229,9 +253,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800',
     priceCredits: 50,
     difficulty: 'advanced',
-    duration: 60,
+    duration: 3600, // minutes
     published: true,
-    courseCode: 'ADL2024'
+    courseCode: 'ADL2024',
+    language: 'en',
+    tags: ['deep learning', 'neural networks', 'AI'],
+    requirements: ['Strong Python skills', 'Mathematics background', 'ML experience'],
+    learningOutcomes: ['Build neural networks', 'Implement deep learning', 'Apply advanced techniques']
   },
   {
     title: 'Data Science Fundamentals',
@@ -240,9 +268,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800',
     priceCredits: 30,
     difficulty: 'intermediate',
-    duration: 50,
+    duration: 3000, // minutes
     published: true,
-    courseCode: 'DSF2024'
+    courseCode: 'DSF2024',
+    language: 'en',
+    tags: ['data science', 'analytics', 'tools'],
+    requirements: ['Basic programming', 'Statistics knowledge', 'Analytical thinking'],
+    learningOutcomes: ['Understand data science', 'Use data tools', 'Apply analytics']
   },
   {
     title: 'Python for Data Analysis',
@@ -251,9 +283,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1526379095098-d400fd0bf935?w=800',
     priceCredits: 25,
     difficulty: 'intermediate',
-    duration: 40,
+    duration: 2400, // minutes
     published: true,
-    courseCode: 'PDA2024'
+    courseCode: 'PDA2024',
+    language: 'en',
+    tags: ['python', 'data analysis', 'programming'],
+    requirements: ['Basic programming concepts', 'Mathematics background', 'Computer literacy'],
+    learningOutcomes: ['Master Python for data', 'Create visualizations', 'Analyze datasets']
   },
   {
     title: 'Statistical Computing with R',
@@ -262,9 +298,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=800',
     priceCredits: 35,
     difficulty: 'intermediate',
-    duration: 45,
+    duration: 2700, // minutes
     published: true,
-    courseCode: 'SCR2024'
+    courseCode: 'SCR2024',
+    language: 'en',
+    tags: ['R programming', 'statistics', 'computing'],
+    requirements: ['Statistics background', 'Programming interest', 'Mathematics knowledge'],
+    learningOutcomes: ['Master R programming', 'Apply statistical methods', 'Perform data analysis']
   },
   {
     title: 'Big Data Analytics',
@@ -273,9 +313,13 @@ const courses = [
     thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800',
     priceCredits: 60,
     difficulty: 'advanced',
-    duration: 70,
+    duration: 4200, // minutes
     published: true,
-    courseCode: 'BDA2024'
+    courseCode: 'BDA2024',
+    language: 'en',
+    tags: ['big data', 'analytics', 'processing'],
+    requirements: ['Programming experience', 'Data background', 'System knowledge'],
+    learningOutcomes: ['Process big data', 'Use analytics tools', 'Scale data solutions']
   }
 ];
 
@@ -283,27 +327,42 @@ const modules = [
   {
     title: 'Introduction to Web Development',
     description: 'Get started with the basics of web development',
-    order: 1
+    order: 1,
+    isPublished: true,
+    estimatedDuration: 60,
+    objectives: ['Understand web development basics', 'Set up development environment', 'Learn HTML fundamentals']
   },
   {
     title: 'HTML & CSS Fundamentals',
     description: 'Learn the building blocks of web pages',
-    order: 2
+    order: 2,
+    isPublished: true,
+    estimatedDuration: 90,
+    objectives: ['Master HTML structure', 'Style pages with CSS', 'Create responsive layouts']
   },
   {
     title: 'JavaScript Basics',
     description: 'Master JavaScript programming fundamentals',
-    order: 3
+    order: 3,
+    isPublished: true,
+    estimatedDuration: 120,
+    objectives: ['Learn JavaScript syntax', 'Understand DOM manipulation', 'Handle user interactions']
   },
   {
     title: 'React Fundamentals',
     description: 'Build modern user interfaces with React',
-    order: 4
+    order: 4,
+    isPublished: true,
+    estimatedDuration: 150,
+    objectives: ['Understand React concepts', 'Build components', 'Manage state and props']
   },
   {
     title: 'Backend Development',
     description: 'Create server-side applications with Node.js',
-    order: 5
+    order: 5,
+    isPublished: true,
+    estimatedDuration: 180,
+    objectives: ['Learn Node.js basics', 'Create REST APIs', 'Handle database operations']
   }
 ];
 
@@ -311,27 +370,42 @@ const lessons = [
   {
     title: 'Welcome to the Course',
     description: 'Introduction and course overview',
-    order: 1
+    order: 1,
+    isPublished: true,
+    isFree: true,
+    files: []
   },
   {
     title: 'Setting Up Your Development Environment',
     description: 'Install and configure your development tools',
-    order: 2
+    order: 2,
+    isPublished: true,
+    isFree: true,
+    files: []
   },
   {
     title: 'HTML Basics',
     description: 'Learn the fundamentals of HTML',
-    order: 3
+    order: 3,
+    isPublished: true,
+    isFree: false,
+    files: []
   },
   {
     title: 'CSS Styling',
     description: 'Make your websites beautiful with CSS',
-    order: 4
+    order: 4,
+    isPublished: true,
+    isFree: false,
+    files: []
   },
   {
     title: 'JavaScript Fundamentals',
     description: 'Programming basics with JavaScript',
-    order: 5
+    order: 5,
+    isPublished: true,
+    isFree: false,
+    files: []
   }
 ];
 
@@ -540,7 +614,7 @@ async function seedDatabase() {
 
     // Seed modules
     console.log('📑 Seeding modules...');
-    const modulesWithCourses = [];
+    const modulesWithCourses: any[] = [];
     for (const course of createdCourses) {
       for (const module of modules) {
         modulesWithCourses.push({
@@ -554,7 +628,7 @@ async function seedDatabase() {
 
     // Seed lessons
     console.log('📖 Seeding lessons...');
-    const lessonsWithModules = [];
+    const lessonsWithModules: any[] = [];
     for (const module of createdModules) {
       for (const lesson of lessons) {
         lessonsWithModules.push({
@@ -609,7 +683,7 @@ async function seedDatabase() {
       { courseTitle: 'Pre Work', progress: 0 }
     ];
 
-    const enrollments = [];
+    const enrollments: any[] = [];
     for (const learner of learners) {
       for (const course of createdCourses) {
         const progressData = enrollmentProgress.find(p => p.courseTitle === course.title);
@@ -634,7 +708,7 @@ async function seedDatabase() {
 
     // Seed notifications
     console.log('🔔 Seeding notifications...');
-    const notificationsWithUsers = [];
+    const notificationsWithUsers: any[] = [];
     for (const user of createdUsers) {
       for (const notification of notifications) {
         notificationsWithUsers.push({
@@ -649,7 +723,7 @@ async function seedDatabase() {
 
     // Seed chat messages
     console.log('💬 Seeding chat messages...');
-    const chatMessages = [];
+    const chatMessages: any[] = [];
     
     // Realistic chat messages for different scenarios
     const realisticMessages = [
