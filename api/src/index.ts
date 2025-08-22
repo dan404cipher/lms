@@ -52,8 +52,24 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 5000;
 
-// Security middleware
-app.use(helmet());
+// Security middleware with custom CSP for PDF embedding
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'", "data:", "blob:"],
+      frameAncestors: ["'self'", "http://localhost:8080", "http://localhost:3000"],
+      sandbox: ["allow-same-origin", "allow-scripts", "allow-forms", "allow-popups", "allow-modals"]
+    }
+  }
+}));
 app.use(cors({
   origin: process.env.CORS_ORIGIN || "http://localhost:8080",
   credentials: true,
@@ -102,13 +118,15 @@ app.use('/api/instructor', instructorRoutes);
 app.use('/api/recordings', recordingRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Serve uploaded files with CORS headers
+// Serve uploaded files with CORS headers and iframe support
 app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.header('X-Frame-Options', 'SAMEORIGIN');
+  res.header('Content-Security-Policy', "frame-ancestors 'self' http://localhost:8080 http://localhost:3000");
   next();
 }, express.static(path.join(__dirname, '../uploads')));
 

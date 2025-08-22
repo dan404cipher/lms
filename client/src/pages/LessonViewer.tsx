@@ -21,13 +21,13 @@ import {
   ZoomOut,
   RotateCw
 } from "lucide-react";
-import { Document, Page, pdfjs } from 'react-pdf';
+// import { Document, Page, pdfjs } from 'react-pdf';
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
 import adminService from "@/services/adminService";
 
-// Set up PDF.js worker - use a proper CDN URL
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+// Use a simple worker setup to avoid CORS issues
+// pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface LessonFile {
   _id: string;
@@ -168,7 +168,8 @@ const LessonViewer = () => {
   useEffect(() => {
     const currentFile = currentLesson?.files?.[currentFileIndex];
     if (currentFile?.type.startsWith('application/pdf')) {
-      handlePdfLoad();
+      const cleanup = handlePdfLoad();
+      return cleanup;
     }
   }, [currentFileIndex, currentLesson]);
 
@@ -248,13 +249,11 @@ const LessonViewer = () => {
     setPdfLoading(true);
     setPdfError(false);
     
-    // Set a timeout to show error if PDF doesn't load within 10 seconds
+    // Set a timeout to show error if PDF doesn't load within 15 seconds
     const timeout = setTimeout(() => {
-      if (pdfLoading) {
-        setPdfError(true);
-        setPdfLoading(false);
-      }
-    }, 10000);
+      setPdfError(true);
+      setPdfLoading(false);
+    }, 15000);
 
     return () => clearTimeout(timeout);
   };
@@ -565,58 +564,22 @@ const LessonViewer = () => {
                                          </div>
                                        </div>
                                        
-                                                                               {/* PDF Viewer */}
-                                        <div className="flex justify-center bg-white rounded-lg border overflow-auto max-h-[70vh]">
-                                          <Document
-                                            file={`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`}
-                                            onLoadSuccess={({ numPages }) => {
-                                              setNumPages(numPages);
+                                                                                                                       {/* PDF Viewer - Embedded iframe */}
+                                        <div className="flex justify-center bg-white rounded-lg border overflow-hidden max-h-[70vh]">
+                                          <iframe
+                                            src={`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`}
+                                            className="w-full h-[70vh] border-0"
+                                            title={currentFile.name}
+                                            onLoad={() => {
+                                              setPdfLoading(false);
                                               setPdfError(false);
-                                              setPdfLoading(false);
                                             }}
-                                            onLoadError={(error) => {
-                                              console.error('Error loading PDF:', error);
+                                            onError={() => {
                                               setPdfError(true);
                                               setPdfLoading(false);
                                             }}
-                                            onSourceSuccess={() => {
-                                              setPdfLoading(false);
-                                            }}
-                                            onSourceError={(error) => {
-                                              console.error('Error loading PDF source:', error);
-                                              setPdfError(true);
-                                              setPdfLoading(false);
-                                            }}
-                                            loading={
-                                              <div className="flex items-center justify-center p-8">
-                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                                <span className="ml-2">Loading PDF...</span>
-                                              </div>
-                                            }
-                                            error={
-                                              <div className="text-center p-8">
-                                                <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                                                <p className="text-muted-foreground mb-2">Failed to load PDF</p>
-                                                <Button 
-                                                  variant="outline" 
-                                                  onClick={() => window.open(`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`, '_blank')}
-                                                >
-                                                  <Download className="h-4 w-4 mr-2" />
-                                                  Open PDF
-                                                </Button>
-                                              </div>
-                                            }
-                                          >
-                                           <Page
-                                             pageNumber={pageNumber}
-                                             scale={scale}
-                                             rotate={rotation}
-                                             renderTextLayer={true}
-                                             renderAnnotationLayer={true}
-                                             className="shadow-sm"
-                                           />
-                                         </Document>
-                                       </div>
+                                          />
+                                        </div>
                                      </>
                                    )}
                                  </div>
