@@ -16,11 +16,18 @@ import {
   CheckCircle,
   Clock,
   BookOpen,
-  StickyNote
+  StickyNote,
+  ZoomIn,
+  ZoomOut,
+  RotateCw
 } from "lucide-react";
+import { Document, Page, pdfjs } from 'react-pdf';
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
 import adminService from "@/services/adminService";
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 interface LessonFile {
   _id: string;
@@ -74,6 +81,10 @@ const LessonViewer = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'learning' | 'notes'>('learning');
   const [navHeight, setNavHeight] = useState(0);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [scale, setScale] = useState(1.0);
+  const [rotation, setRotation] = useState(0);
 
   const isInstructor = user?.role === 'instructor';
   const isAdmin = user?.role === 'admin';
@@ -102,6 +113,7 @@ const LessonViewer = () => {
         
         if (lesson) {
           setCurrentLesson(lesson);
+          resetPdfControls();
         } else {
           // If lesson not found, navigate to first lesson
           const firstLesson = response.data.course.modules?.[0]?.lessons?.[0];
@@ -183,6 +195,14 @@ const LessonViewer = () => {
 
   const navigateToLesson = (lesson: Lesson) => {
     navigate(`/courses/${courseId}/lessons/${lesson._id}`);
+  };
+
+  // Reset PDF controls when switching files
+  const resetPdfControls = () => {
+    setPageNumber(1);
+    setScale(1.0);
+    setRotation(0);
+    setNumPages(null);
   };
 
   const navigateToPrevious = () => {
@@ -314,7 +334,10 @@ const LessonViewer = () => {
                                 key={file._id}
                                 variant={index === currentFileIndex ? "default" : "outline"}
                                 size="sm"
-                                onClick={() => setCurrentFileIndex(index)}
+                                onClick={() => {
+                                  setCurrentFileIndex(index);
+                                  resetPdfControls();
+                                }}
                                 className="flex items-center gap-2"
                               >
                                 {getFileIcon(file.type)}
@@ -384,6 +407,98 @@ const LessonViewer = () => {
                                     </Button>
                                   </div>
                                 </div>
+                                                             ) : currentFile.type.startsWith('application/pdf') ? (
+                                 <div className="space-y-4">
+                                   {/* PDF Controls */}
+                                   <div className="flex items-center justify-between bg-muted/20 p-3 rounded-lg">
+                                     <div className="flex items-center gap-2">
+                                       <Button
+                                         variant="outline"
+                                         size="sm"
+                                         onClick={() => setPageNumber(Math.max(1, pageNumber - 1))}
+                                         disabled={pageNumber <= 1}
+                                       >
+                                         Previous
+                                       </Button>
+                                       <span className="text-sm">
+                                         Page {pageNumber} of {numPages || '?'}
+                                       </span>
+                                       <Button
+                                         variant="outline"
+                                         size="sm"
+                                         onClick={() => setPageNumber(Math.min(numPages || 1, pageNumber + 1))}
+                                         disabled={pageNumber >= (numPages || 1)}
+                                       >
+                                         Next
+                                       </Button>
+                                     </div>
+                                     <div className="flex items-center gap-2">
+                                       <Button
+                                         variant="outline"
+                                         size="sm"
+                                         onClick={() => setScale(Math.max(0.5, scale - 0.1))}
+                                         disabled={scale <= 0.5}
+                                       >
+                                         <ZoomOut className="h-4 w-4" />
+                                       </Button>
+                                       <span className="text-sm min-w-[60px] text-center">{Math.round(scale * 100)}%</span>
+                                       <Button
+                                         variant="outline"
+                                         size="sm"
+                                         onClick={() => setScale(Math.min(3, scale + 0.1))}
+                                         disabled={scale >= 3}
+                                       >
+                                         <ZoomIn className="h-4 w-4" />
+                                       </Button>
+                                       <Button
+                                         variant="outline"
+                                         size="sm"
+                                         onClick={() => setRotation((rotation + 90) % 360)}
+                                       >
+                                         <RotateCw className="h-4 w-4" />
+                                       </Button>
+                                     </div>
+                                   </div>
+                                   
+                                   {/* PDF Viewer */}
+                                   <div className="flex justify-center bg-white rounded-lg border overflow-auto max-h-[70vh]">
+                                     <Document
+                                       file={`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`}
+                                       onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+                                       onLoadError={(error) => {
+                                         console.error('Error loading PDF:', error);
+                                       }}
+                                       loading={
+                                         <div className="flex items-center justify-center p-8">
+                                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                           <span className="ml-2">Loading PDF...</span>
+                                         </div>
+                                       }
+                                       error={
+                                         <div className="text-center p-8">
+                                           <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                                           <p className="text-muted-foreground mb-2">Failed to load PDF</p>
+                                           <Button 
+                                             variant="outline" 
+                                             onClick={() => window.open(`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`, '_blank')}
+                                           >
+                                             <Download className="h-4 w-4 mr-2" />
+                                             Open PDF
+                                           </Button>
+                                         </div>
+                                       }
+                                     >
+                                       <Page
+                                         pageNumber={pageNumber}
+                                         scale={scale}
+                                         rotate={rotation}
+                                         renderTextLayer={true}
+                                         renderAnnotationLayer={true}
+                                         className="shadow-sm"
+                                       />
+                                     </Document>
+                                   </div>
+                                 </div>
                               ) : (
                                 <div className="text-center py-12">
                                   <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />

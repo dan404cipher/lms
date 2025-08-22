@@ -247,20 +247,7 @@ const instructorService = {
     return response.data;
   },
 
-  // Material Management
-  async uploadMaterial(courseId: string, file: File) {
-    const formData = new FormData();
-    formData.append('material', file);
-    formData.append('title', file.name);
-    formData.append('description', `Uploaded material: ${file.name}`);
-    
-    const response = await instructorAxios.post(`/instructor/courses/${courseId}/materials`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-    return response.data;
-  }
+
 };
 
 export default instructorService;
