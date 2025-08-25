@@ -12,6 +12,7 @@ import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { Announcement } from '../models/Announcement';
 import { uploadFileLocally } from '../utils/fileUpload';
+import ActivityLogger from '../utils/activityLogger';
 import fs from 'fs';
 import path from 'path';
 
@@ -178,15 +179,22 @@ export const updateUser = async (req: AuthRequest, res: Response, next: NextFunc
     if (status) user.status = status;
     if (credits !== undefined) user.credits = credits;
     
-    // Update profile fields
-    if (bio !== undefined || location !== undefined || phone !== undefined || website !== undefined) {
-      user.profile = {
-        ...user.profile,
-        bio: bio !== undefined ? bio : user.profile?.bio || '',
-        location: location !== undefined ? location : user.profile?.location || '',
-        phone: phone !== undefined ? phone : user.profile?.phone || '',
-        website: website !== undefined ? website : user.profile?.website || ''
-      };
+    // Update profile fields individually to avoid schema validation issues
+    if (bio !== undefined) {
+      if (!user.profile) user.profile = {};
+      user.profile.bio = bio;
+    }
+    if (location !== undefined) {
+      if (!user.profile) user.profile = {};
+      user.profile.location = location;
+    }
+    if (phone !== undefined) {
+      if (!user.profile) user.profile = {};
+      user.profile.phone = phone;
+    }
+    if (website !== undefined) {
+      if (!user.profile) user.profile = {};
+      user.profile.website = website;
     }
 
     // Handle password update separately
@@ -453,8 +461,15 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       title: course.title,
       description: course.description,
       shortDescription: course.shortDescription,
-      instructorId: course.instructorId,
-      categoryId: course.categoryId,
+      instructorId: (course.instructorId as any)._id,
+      instructor: {
+        name: (course.instructorId as any).name,
+        email: (course.instructorId as any).email
+      },
+      categoryId: (course.categoryId as any)._id,
+      category: {
+        name: (course.categoryId as any).name
+      },
       courseCode: course.courseCode,
       published: course.published,
       thumbnail: course.thumbnail,
@@ -515,6 +530,107 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
     res.json({
       success: true,
       data: { course: courseDetail }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update course (Admin only)
+// @route   PUT /api/admin/courses/:courseId
+// @access  Private (Admin)
+export const updateCourse = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: errors.array()
+      });
+    }
+
+    const course = await Course.findById(req.params.courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Update course fields
+    const {
+      title,
+      description,
+      shortDescription,
+      courseCode,
+      difficulty,
+      duration,
+      priceCredits,
+      language,
+      tags,
+      requirements,
+      learningOutcomes,
+      instructorId
+    } = req.body;
+
+    if (title) course.title = title;
+    if (description) course.description = description;
+    if (shortDescription) course.shortDescription = shortDescription;
+    if (courseCode) course.courseCode = courseCode;
+    if (difficulty) course.difficulty = difficulty;
+    if (duration) course.duration = duration;
+    if (priceCredits !== undefined) course.priceCredits = priceCredits;
+    if (language) course.language = language;
+    if (tags) course.tags = tags;
+    if (requirements) course.requirements = requirements;
+    if (learningOutcomes) course.learningOutcomes = learningOutcomes;
+    // Handle instructor change and enrollment
+    if (instructorId && instructorId !== course.instructorId.toString()) {
+      const oldInstructorId = course.instructorId;
+      course.instructorId = instructorId;
+
+      // Remove old instructor's enrollment if they exist
+      if (oldInstructorId) {
+        await Enrollment.findOneAndDelete({
+          userId: oldInstructorId,
+          courseId: course._id
+        });
+      }
+
+      // Add new instructor's enrollment
+      const existingEnrollment = await Enrollment.findOne({
+        userId: instructorId,
+        courseId: course._id
+      });
+
+      if (!existingEnrollment) {
+        const newEnrollment = new Enrollment({
+          userId: instructorId,
+          courseId: course._id,
+          status: 'active',
+          creditsPaid: course.priceCredits || 0,
+          progress: {
+            completedLessons: [],
+            currentLesson: null,
+            completionPercentage: 0,
+            timeSpent: 0,
+            lastAccessedAt: new Date()
+          }
+        });
+        await newEnrollment.save();
+      }
+    }
+
+    await course.save();
+
+    // Populate instructor and category for response
+    await course.populate('instructorId', 'name email');
+    await course.populate('categoryId', 'name');
+
+    res.json({
+      success: true,
+      data: { course }
     });
   } catch (error) {
     next(error);
@@ -1018,7 +1134,6 @@ export const addStudentsToCourse = async (req: AuthRequest, res: Response, next:
       return {
         userId,
         courseId,
-        role: user?.role || 'learner',
         progress: user?.role === 'learner' ? {
           completedLessons: [],
           currentLesson: null,
@@ -1032,6 +1147,35 @@ export const addStudentsToCourse = async (req: AuthRequest, res: Response, next:
     });
 
     await Enrollment.insertMany(newEnrollments);
+    
+    // Enrollments created successfully
+
+    // Check if any of the new users are instructors and update course instructor if needed
+    const newInstructors = newUserIds.filter(userId => {
+      const user = users.find((u: any) => u._id.toString() === userId);
+      return user?.role === 'instructor';
+    });
+
+    if (newInstructors.length > 0) {
+      // If there are multiple instructors, use the first one
+      const newInstructorId = newInstructors[0];
+      
+      // Update the course's instructorId
+      await Course.findByIdAndUpdate(courseId, {
+        instructorId: newInstructorId
+      });
+    }
+
+    // Log enrollment activities for each user
+    for (const enrollment of newEnrollments) {
+      const user = users.find((u: any) => u._id.toString() === enrollment.userId);
+      await ActivityLogger.logCourseEnrollment(
+        enrollment.userId,
+        courseId,
+        course.title,
+        req
+      );
+    }
 
     res.json({
       success: true,
@@ -1090,6 +1234,30 @@ export const removeStudentFromCourse = async (req: AuthRequest, res: Response, n
         success: false,
         message: 'User is not enrolled in this course'
       });
+    }
+
+    // If the removed user was an instructor and is the current course instructor, update the course
+    if (user.role === 'instructor' && course.instructorId.toString() === userId) {
+      // Find another instructor enrolled in this course
+      const otherInstructorEnrollment = await Enrollment.findOne({
+        courseId,
+        userId: { $ne: userId },
+        status: { $in: ['active', 'completed'] }
+      }).populate('userId');
+
+      if (otherInstructorEnrollment && (otherInstructorEnrollment.userId as any).role === 'instructor') {
+        // Set the other instructor as the course instructor
+        await Course.findByIdAndUpdate(courseId, {
+          instructorId: otherInstructorEnrollment.userId._id
+        });
+        console.log(`removeStudentFromCourse - Updated course instructor to: ${otherInstructorEnrollment.userId._id}`);
+      } else {
+        // No other instructors, set instructorId to null or remove it
+        await Course.findByIdAndUpdate(courseId, {
+          $unset: { instructorId: 1 }
+        });
+        console.log(`removeStudentFromCourse - Removed instructor from course: ${courseId}`);
+      }
     }
 
     res.json({

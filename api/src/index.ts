@@ -31,6 +31,7 @@ import courseRoutes from './routes/courses';
 import userRoutes from './routes/users';
 import sessionRoutes from './routes/sessions';
 import categoryRoutes from './routes/categories';
+import activityRoutes from './routes/activities';
 
 import chatRoutes from './routes/chat';
 import connectionRoutes from './routes/connections';
@@ -91,8 +92,8 @@ app.use(compression());
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
-app.use(express.json({ limit: '1gb' }));
-app.use(express.urlencoded({ extended: true, limit: '1gb' }));
+app.use(express.json({ limit: '2gb' }));
+app.use(express.urlencoded({ extended: true, limit: '2gb' }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -109,6 +110,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/activities', activityRoutes);
 
 app.use('/api/chat', chatRoutes);
 app.use('/api/connections', connectionRoutes);

@@ -45,10 +45,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await authService.login({ email, password });
-    localStorage.setItem('token', response.data.token);
-    localStorage.setItem('refreshToken', response.data.refreshToken);
-    setUser(response.data.user);
+    try {
+      const response = await authService.login({ email, password });
+      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('refreshToken', response.data.refreshToken);
+      setUser(response.data.user);
+    } catch (error) {
+      // Re-throw the error so the Login component can handle it
+      throw error;
+    }
   };
 
   const register = async (data: any) => {

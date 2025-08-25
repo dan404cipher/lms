@@ -168,8 +168,7 @@ const LessonViewer = () => {
   useEffect(() => {
     const currentFile = currentLesson?.files?.[currentFileIndex];
     if (currentFile?.type.startsWith('application/pdf')) {
-      const cleanup = handlePdfLoad();
-      return cleanup;
+      handlePdfLoad();
     }
   }, [currentFileIndex, currentLesson]);
 
@@ -244,18 +243,10 @@ const LessonViewer = () => {
     setPdfLoading(false);
   };
 
-  // Handle PDF loading with timeout
+  // Handle PDF loading without automatic timeout
   const handlePdfLoad = () => {
     setPdfLoading(true);
     setPdfError(false);
-    
-    // Set a timeout to show error if PDF doesn't load within 15 seconds
-    const timeout = setTimeout(() => {
-      setPdfError(true);
-      setPdfLoading(false);
-    }, 15000);
-
-    return () => clearTimeout(timeout);
   };
 
   const navigateToPrevious = () => {
@@ -514,7 +505,7 @@ const LessonViewer = () => {
                                    ) : (
                                      <>
                                        {/* PDF Controls */}
-                                       <div className="flex items-center justify-between bg-muted/20 p-3 rounded-lg">
+                                       <div className="flex items-center justify-between bg-muted/20  rounded-lg">
                                          <div className="flex items-center gap-2">
                                            <Button
                                              variant="outline"
@@ -566,19 +557,50 @@ const LessonViewer = () => {
                                        
                                                                                                                        {/* PDF Viewer - Embedded iframe */}
                                         <div className="flex justify-center bg-white rounded-lg border overflow-hidden max-h-[70vh]">
-                                          <iframe
-                                            src={`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`}
-                                            className="w-full h-[70vh] border-0"
-                                            title={currentFile.name}
-                                            onLoad={() => {
-                                              setPdfLoading(false);
-                                              setPdfError(false);
-                                            }}
-                                            onError={() => {
-                                              setPdfError(true);
-                                              setPdfLoading(false);
-                                            }}
-                                          />
+                                          {pdfError ? (
+                                            <div className="flex flex-col items-center justify-center p-8 w-full">
+                                              <div className="text-center mb-6">
+                                                <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                                                <h3 className="text-lg font-medium mb-2">PDF preview not available</h3>
+                                                <p className="text-sm text-muted-foreground mb-4">{currentFile.name}</p>
+                                              </div>
+                                              
+                                              <div className="flex gap-3">
+                                                <Button 
+                                                  onClick={() => window.open(`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`, '_blank')}
+                                                  className="flex items-center gap-2"
+                                                >
+                                                  <Download className="h-4 w-4" />
+                                                  Open PDF
+                                                </Button>
+                                                
+                                                <Button 
+                                                  variant="outline"
+                                                  onClick={() => {
+                                                    setPdfError(false);
+                                                    setPdfLoading(true);
+                                                  }}
+                                                  className="flex items-center gap-2"
+                                                >
+                                                  Retry
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <iframe
+                                              src={`${import.meta.env.VITE_API_URL.replace('/api', '')}${currentFile.url}`}
+                                              className="w-full h-[70vh] border-0"
+                                              title={currentFile.name}
+                                              onLoad={() => {
+                                                setPdfLoading(false);
+                                                setPdfError(false);
+                                              }}
+                                              onError={() => {
+                                                setPdfError(true);
+                                                setPdfLoading(false);
+                                              }}
+                                            />
+                                          )}
                                         </div>
                                      </>
                                    )}

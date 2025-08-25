@@ -5,6 +5,7 @@ import { Recording } from '../models/Recording';
 import { Course } from '../models/Course';
 import { Enrollment } from '../models/Enrollment';
 import zoomIntegration from '../utils/zoomIntegration';
+import ActivityLogger from '../utils/activityLogger';
 import fs from 'fs';
 import path from 'path';
 
@@ -327,6 +328,15 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
 
     console.log('Access granted, proceeding with join');
 
+    // Log session join activity
+    await ActivityLogger.logSessionJoin(
+      (req.user as any)._id.toString(),
+      (session as any)._id.toString(),
+      session.title,
+      (session.courseId as any)._id.toString(),
+      req
+    );
+
     // For testing, allow joining regardless of time restrictions
     // In production, you might want to keep these checks
     /*
@@ -355,7 +365,7 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
       data: { 
         joinUrl: session.joinUrl,
         sessionTitle: session.title,
-        courseTitle: 'Course Title' // TODO: Populate courseId to get actual title
+        courseTitle: (session.courseId as any).title
       }
     });
   } catch (error) {

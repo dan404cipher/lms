@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import sessionService, { SessionData } from "@/services/sessionService";
 import { 
@@ -41,7 +40,6 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
   const [selectedTime, setSelectedTime] = useState("");
   const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [maxParticipants, setMaxParticipants] = useState<number | undefined>(undefined);
-  const [viewMode, setViewMode] = useState<"instructor" | "learner">("instructor");
   
   // Calendar state
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -152,9 +150,26 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
   const weekDays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   
   const timeSlots = [
-    "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM",
-    "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM"
+    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30",
+    "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+    "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30"
   ];
+
+  const formatTimeForDisplay = (time: string) => {
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const getTimeCategory = (time: string) => {
+    const [hours] = time.split(':');
+    const hour = parseInt(hours);
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  };
 
   if (!isOpen) return null;
 
@@ -281,6 +296,28 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
               {/* Date & Time */}
               <div className="space-y-4">
                 <Label>Date & Time *</Label>
+                
+                {/* Selected Date & Time Display */}
+                {selectedDate && selectedTime && (
+                  <div className="p-4 bg-muted/20 rounded-lg border">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>Selected Schedule:</span>
+                    </div>
+                    <div className="font-medium">
+                      {new Date(selectedDate).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {formatTimeForDisplay(selectedTime)} ({selectedTime})
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="date">Date</Label>
@@ -295,13 +332,79 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time">Time</Label>
-                    <Input
-                      id="time"
-                      type="time"
-                      value={selectedTime}
-                      onChange={(e) => setSelectedTime(e.target.value)}
-                      required
-                    />
+                    <div className="flex gap-2 items-center">
+                      {/* Hour Selector */}
+                      <Select 
+                        value={selectedTime ? selectedTime.split(':')[0] : '10'} 
+                        onValueChange={(hour) => {
+                          const currentMinute = selectedTime ? selectedTime.split(':')[1] : '00';
+                          setSelectedTime(`${hour.padStart(2, '0')}:${currentMinute}`);
+                        }}
+                      >
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({length: 24}, (_, i) => (
+                            <SelectItem key={i} value={i.toString().padStart(2, '0')}>
+                              {i === 0 ? '12' : i > 12 ? (i - 12).toString() : i.toString()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      <span className="text-lg font-medium">:</span>
+                      
+                      {/* Minute Selector */}
+                      <Select 
+                        value={selectedTime ? selectedTime.split(':')[1] : '00'} 
+                        onValueChange={(minute) => {
+                          const currentHour = selectedTime ? selectedTime.split(':')[0] : '10';
+                          setSelectedTime(`${currentHour}:${minute.padStart(2, '0')}`);
+                        }}
+                      >
+                        <SelectTrigger className="w-20">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({length: 60}, (_, i) => (
+                            <SelectItem key={i} value={i.toString().padStart(2, '0')}>
+                              {i.toString().padStart(2, '0')}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* AM/PM Selector */}
+                      <Select 
+                        value={selectedTime ? (parseInt(selectedTime.split(':')[0]) >= 12 ? 'PM' : 'AM') : 'AM'} 
+                        onValueChange={(ampm) => {
+                          const [hour, minute] = selectedTime ? selectedTime.split(':') : ['10', '00'];
+                          let newHour = parseInt(hour);
+                          
+                          if (ampm === 'PM' && newHour < 12) {
+                            newHour += 12;
+                          } else if (ampm === 'AM' && newHour >= 12) {
+                            newHour -= 12;
+                          }
+                          
+                          setSelectedTime(`${newHour.toString().padStart(2, '0')}:${minute}`);
+                        }}
+                      >
+                        <SelectTrigger className="w-16">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="AM">AM</SelectItem>
+                          <SelectItem value="PM">PM</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Display current selection */}
+                    <div className="text-sm text-muted-foreground">
+                      Selected: {selectedTime ? formatTimeForDisplay(selectedTime) : 'No time selected'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -330,14 +433,7 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
           <div className="w-1/2 p-6 flex flex-col">
             {/* Calendar Header */}
             <div className="flex items-center justify-between mb-6">
-              <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "instructor" | "learner")}>
-                <TabsList>
-                  <TabsTrigger value="instructor">Instructor</TabsTrigger>
-                  <TabsTrigger value="learner">Learner</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-                              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4">
                 <Button variant="outline" size="sm" onClick={() => setCurrentWeek(new Date())}>
                   Today
                 </Button>
@@ -375,7 +471,7 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
             <div className="flex-1 overflow-hidden">
               <div className="h-full flex flex-col">
                 {/* Days Header */}
-                <div className="grid grid-cols-7 gap-1 mb-2">
+                <div className="grid grid-cols-7 gap-1 mb-4">
                   {weekDays.map((day, index) => {
                     const date = weekDates[index];
                     const isToday = date.toDateString() === new Date().toDateString();
@@ -399,22 +495,38 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                   })}
                 </div>
 
+                {/* Time Selection */}
+                <div className="mb-3">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Select Time</h3>
+                </div>
+                
                 {/* Time Slots Grid */}
                 <div className="flex-1 overflow-y-auto">
-                  <div className="grid grid-cols-7 gap-1">
-                    {timeSlots.map((time) => (
-                      <div key={time} className="grid grid-cols-7 gap-1">
-                        <div className="text-xs text-muted-foreground p-2 flex items-center">
-                          {time}
+                  <div className="space-y-1">
+                    {timeSlots.map((time) => {
+                      const isSelected = selectedTime === time;
+                      
+                      return (
+                        <div 
+                          key={time} 
+                          className={`p-3 rounded-lg cursor-pointer transition-all ${
+                            isSelected 
+                              ? 'bg-primary text-primary-foreground shadow-sm' 
+                              : 'hover:bg-muted/50 border border-transparent hover:border-border'
+                          }`}
+                          onClick={() => setSelectedTime(time)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{formatTimeForDisplay(time)}</span>
+                            {isSelected && (
+                              <div className="text-xs bg-primary-foreground/20 px-2 py-1 rounded">
+                                Selected
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        {weekDays.map((day) => (
-                          <div
-                            key={`${day}-${time}`}
-                            className="border border-border/50 min-h-[40px] p-1 hover:bg-muted/50 cursor-pointer transition-colors"
-                          />
-                        ))}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>

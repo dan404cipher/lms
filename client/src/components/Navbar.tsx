@@ -10,6 +10,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Menu, X, Search, LogOut, LayoutDashboard, GraduationCap, Activity, Users, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -17,9 +28,16 @@ import { motion } from "framer-motion";
 
 const Navbar = memo(() => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleLogout = () => {
+    logout();
+    setTimeout(() => navigate("/"), 100);
+    setShowLogoutConfirm(false);
+  };
 
   const handleNavigation = (path: string) => {
     // Add a small delay for smoother transition
@@ -201,10 +219,7 @@ const Navbar = memo(() => {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
-                      onClick={() => { 
-                        logout(); 
-                        setTimeout(() => navigate("/"), 100); 
-                      }}
+                      onClick={() => setShowLogoutConfirm(true)}
                       className="text-red-600 focus:text-red-600"
                     >
                       <LogOut className="mr-2 h-4 w-4" />
@@ -331,7 +346,7 @@ const Navbar = memo(() => {
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
                   </Button>
-                  <Button variant="ghost" className="justify-start text-red-600 hover:text-red-700" onClick={() => { logout(); navigate("/"); }}>
+                  <Button variant="ghost" className="justify-start text-red-600 hover:text-red-700" onClick={() => setShowLogoutConfirm(true)}>
                     <LogOut className="h-4 w-4 mr-2" />
                     Logout
                   </Button>
@@ -350,6 +365,24 @@ const Navbar = memo(() => {
             </div>
           </div>
         )}
+
+        {/* Logout Confirmation Dialog */}
+        <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to sign out? You will need to log in again to access your account.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleLogout} className="bg-red-600 hover:bg-red-700">
+                Sign Out
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </nav>
   );

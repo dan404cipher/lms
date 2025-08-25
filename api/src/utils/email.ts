@@ -9,15 +9,33 @@ interface EmailData {
 
 // Create transporter
 const createTransporter = () => {
-  return nodemailer.createTransport({
+  // Validate required environment variables
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('SMTP configuration is incomplete. Please check your environment variables.');
+  }
+
+  const config = {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false, // true for 465, false for other ports
+    secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-  });
+    // Production settings
+    pool: true, // Use pooled connection
+    maxConnections: 5, // Maximum number of connections to pool
+    maxMessages: 100, // Maximum number of messages per connection
+    rateLimit: 14, // Maximum number of messages per second
+    // Timeout settings
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000, // 30 seconds
+    socketTimeout: 60000, // 60 seconds
+  };
+
+  console.log(`Creating SMTP transporter for ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
+  
+  return nodemailer.createTransport(config);
 };
 
 // Email templates
@@ -122,8 +140,21 @@ const emailTemplates = {
 
 // Send email function
 export const sendEmail = async (emailData: EmailData): Promise<void> => {
+  let transporter: any = null;
+  
   try {
-    const transporter = createTransporter();
+    // Validate email data
+    if (!emailData.to || !emailData.template) {
+      throw new Error('Email data is incomplete: missing recipient or template');
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailData.to)) {
+      throw new Error(`Invalid email format: ${emailData.to}`);
+    }
+
+    transporter = createTransporter();
     
     // Get template
     const template = emailTemplates[emailData.template as keyof typeof emailTemplates];
@@ -133,18 +164,53 @@ export const sendEmail = async (emailData: EmailData): Promise<void> => {
     
     const emailContent = template(emailData.data);
     
-    // Send email
-    await transporter.sendMail({
-      from: `"LMS Platform" <${process.env.SMTP_USER}>`,
+    // Prepare email options
+    const mailOptions = {
+      from: `"${process.env.SMTP_FROM_NAME || 'LMS Platform'}" <${process.env.SMTP_USER}>`,
       to: emailData.to,
       subject: emailContent.subject,
       html: emailContent.html,
-    });
+      // Add headers for better deliverability
+      headers: {
+        'X-Priority': '3',
+        'X-MSMail-Priority': 'Normal',
+        'Importance': 'normal'
+      }
+    };
     
-    console.log(`Email sent successfully to ${emailData.to}`);
+    // Send email with timeout
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Email send timeout')), 30000)
+    );
+    
+    await Promise.race([sendPromise, timeoutPromise]);
+    
+    console.log(`✅ Email sent successfully to ${emailData.to}`);
+    
   } catch (error) {
-    console.error('Failed to send email:', error);
+    console.error(`❌ Failed to send email to ${emailData.to}:`, error);
+    
+    // Log specific error details for debugging
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        code: (error as any).code,
+        response: (error as any).response
+      });
+    }
+    
     throw error;
+  } finally {
+    // Close transporter if it exists
+    if (transporter) {
+      try {
+        await transporter.close();
+      } catch (closeError) {
+        console.warn('Failed to close transporter:', closeError);
+      }
+    }
   }
 };
 

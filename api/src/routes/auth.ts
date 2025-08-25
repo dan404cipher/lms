@@ -1,6 +1,6 @@
 import express from 'express';
 import { body } from 'express-validator';
-import { register, login, refreshToken, forgotPassword, resetPassword, verifyEmail, getProfile, updateProfile } from '../controllers/authController';
+import { register, login, refreshToken, forgotPassword, validateResetToken, resetPassword, verifyEmail, getProfile, updateProfile } from '../controllers/authController';
 import { protect } from '../middleware/auth';
 
 const router = express.Router();
@@ -23,7 +23,6 @@ const forgotPasswordValidation = [
 ];
 
 const resetPasswordValidation = [
-  body('token').notEmpty().withMessage('Reset token is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
 ];
 
@@ -32,7 +31,8 @@ router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.post('/refresh-token', refreshToken);
 router.post('/forgot-password', forgotPasswordValidation, forgotPassword);
-router.post('/reset-password', resetPasswordValidation, resetPassword);
+router.get('/reset-password/:token', validateResetToken);
+router.post('/reset-password/:token', resetPasswordValidation, resetPassword);
 router.post('/verify-email/:token', verifyEmail);
 
 // Protected routes

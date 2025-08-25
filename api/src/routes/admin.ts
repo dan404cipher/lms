@@ -12,6 +12,7 @@ import {
   getAllCourses,
   createCourse,
   getCourseById,
+  updateCourse,
   updateCourseStatus,
   deleteCourse,
   addStudentsToCourse,
@@ -107,6 +108,21 @@ const courseValidation = [
   body('thumbnail').optional().isURL().withMessage('Thumbnail must be a valid URL')
 ];
 
+const updateCourseValidation = [
+  body('title').optional().trim().isLength({ min: 3, max: 100 }).withMessage('Title must be between 3 and 100 characters'),
+  body('description').optional().trim().isLength({ min: 10, max: 2000 }).withMessage('Description must be between 10 and 2000 characters'),
+  body('shortDescription').optional().trim().isLength({ min: 10, max: 200 }).withMessage('Short description must be between 10 and 200 characters'),
+  body('courseCode').optional().trim().isLength({ min: 2, max: 20 }).withMessage('Course code must be between 2 and 20 characters'),
+  body('priceCredits').optional().isInt({ min: 0 }).withMessage('Price credits must be a non-negative integer'),
+  body('difficulty').optional().isIn(['beginner', 'intermediate', 'advanced']).withMessage('Difficulty must be beginner, intermediate, or advanced'),
+  body('duration').optional().isInt({ min: 1 }).withMessage('Duration must be at least 1 minute'),
+  body('language').optional().isLength({ min: 2, max: 5 }).withMessage('Language code must be 2-5 characters'),
+  body('tags').optional().isArray().withMessage('Tags must be an array'),
+  body('requirements').optional().isArray().withMessage('Requirements must be an array'),
+  body('learningOutcomes').optional().isArray().withMessage('Learning outcomes must be an array'),
+  body('instructorId').optional().isMongoId().withMessage('Valid instructor ID is required')
+];
+
 const notificationValidation = [
   body('title').trim().isLength({ min: 1, max: 100 }).withMessage('Title must be between 1 and 100 characters'),
   body('message').trim().isLength({ min: 1, max: 1000 }).withMessage('Message must be between 1 and 1000 characters'),
@@ -127,6 +143,7 @@ router.patch('/users/:userId/toggle-status', toggleUserStatus);
 router.get('/courses', getAllCourses);
 router.post('/courses', courseValidation, createCourse);
 router.get('/courses/:courseId', getCourseById);
+router.put('/courses/:courseId', updateCourseValidation, updateCourse);
 router.patch('/courses/:courseId/status', courseStatusValidation, updateCourseStatus);
 router.delete('/courses/:courseId', deleteCourse);
 

@@ -197,8 +197,9 @@ export interface AdminResponse<T = any> {
 
 class AdminService {
   // User Management
-  async getAllUsers(): Promise<AdminResponse<{ users: User[]; pagination: any }>> {
-    const response = await adminAxios.get('/admin/users');
+  async getAllUsers(params?: URLSearchParams): Promise<AdminResponse<{ users: User[]; pagination: any }>> {
+    const url = params ? `/admin/users?${params.toString()}` : '/admin/users';
+    const response = await adminAxios.get(url);
     return response.data;
   }
 
@@ -280,6 +281,11 @@ class AdminService {
     return response.data;
   }
 
+  async updateCourse(courseId: string, courseData: any): Promise<AdminResponse<Course>> {
+    const response = await adminAxios.put(`/admin/courses/${courseId}`, courseData);
+    return response.data;
+  }
+
   async updateCourseStatus(courseId: string, status: string): Promise<AdminResponse<Course>> {
     const response = await adminAxios.patch(`/admin/courses/${courseId}/status`, { status });
     return response.data;
@@ -347,10 +353,8 @@ class AdminService {
     return response.data;
   }
 
-  async uploadMaterial(courseId: string, file: File): Promise<AdminResponse<any>> {
-    const formData = new FormData();
-    formData.append('material', file);
-    const response = await adminAxios.post(`/admin/courses/${courseId}/materials`, formData, {
+  async uploadMaterial(courseId: string, materialData: FormData): Promise<AdminResponse<any>> {
+    const response = await adminAxios.post(`/admin/courses/${courseId}/materials`, materialData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

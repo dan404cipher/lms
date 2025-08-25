@@ -44,8 +44,40 @@ activityAxios.interceptors.response.use(
 );
 
 class ActivityService {
-  async getMyActivities() {
-    const response = await activityAxios.get('/sessions/my-activities');
+  async getMyActivities(params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    courseId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const response = await activityAxios.get('/activities/my-activities', { params });
+    return response.data;
+  }
+
+  async getActivityStats() {
+    const response = await activityAxios.get('/activities/stats');
+    return response.data;
+  }
+
+  async getActivityTypes() {
+    const response = await activityAxios.get('/activities/types');
+    return response.data;
+  }
+
+  async exportActivities(params?: {
+    startDate?: string;
+    endDate?: string;
+    type?: string;
+    courseId?: string;
+  }) {
+    const response = await activityAxios.get('/activities/export', { params });
+    return response.data;
+  }
+
+  async deleteActivity(activityId: string) {
+    const response = await activityAxios.delete(`/activities/${activityId}`);
     return response.data;
   }
 }

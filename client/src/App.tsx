@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import Navbar from "./components/Navbar";
 import PageTransition from "./components/PageTransition";
 import Layout from "./components/Layout";
@@ -20,50 +21,55 @@ import Activity from "./pages/Activity";
 import UserManagement from "./pages/UserManagement";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <div className="min-h-screen bg-background">
-            <Navbar />
-            <PageTransition>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
-                <Route path="/courses" element={<Layout><Courses /></Layout>} />
-                <Route path="/courses/:courseId" element={<Layout><UnifiedCourseDetail /></Layout>} />
-                <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonViewer />} />
-                <Route path="/activity" element={<Layout><Activity /></Layout>} />
-                
-                {/* Instructor Routes */}
-                <Route path="/instructor/dashboard" element={<Layout><InstructorDashboard /></Layout>} />
-                <Route path="/instructor/courses/:courseId" element={<Layout><UnifiedCourseDetail /></Layout>} />
-                
-                {/* Admin Routes */}
-                <Route path="/admin/dashboard" element={<Layout><AdminDashboard /></Layout>} />
-                <Route path="/admin/users" element={<Layout><UserManagement /></Layout>} />
-                
-                {/* User Routes */}
-                <Route path="/profile" element={<Layout><Profile /></Layout>} />
-                <Route path="/settings" element={<Layout><Settings /></Layout>} />
-                
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<Layout><NotFound /></Layout>} />
-              </Routes>
-            </PageTransition>
+    <ThemeProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <div className="min-h-screen bg-background">
+              <PageTransition>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password/:token" element={<ResetPassword />} />
+                  <Route path="/dashboard" element={<Layout><Dashboard /></Layout>} />
+                  <Route path="/courses" element={<Layout><Courses /></Layout>} />
+                  <Route path="/courses/:courseId" element={<Layout><UnifiedCourseDetail /></Layout>} />
+                  <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonViewer />} />
+                  <Route path="/activity" element={<Layout><Activity /></Layout>} />
+                  
+                  {/* Instructor Routes */}
+                  <Route path="/instructor/dashboard" element={<Layout><InstructorDashboard /></Layout>} />
+                  <Route path="/instructor/courses/:courseId" element={<Layout><UnifiedCourseDetail /></Layout>} />
+                  
+                  {/* Admin Routes */}
+                  <Route path="/admin/dashboard" element={<Layout><AdminDashboard /></Layout>} />
+                  <Route path="/admin/users" element={<Layout><UserManagement /></Layout>} />
+                  
+                  {/* User Routes */}
+                  <Route path="/profile" element={<Layout><Profile /></Layout>} />
+                  <Route path="/settings" element={<Layout><Settings /></Layout>} />
+                  
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<Layout><NotFound /></Layout>} />
+                </Routes>
+              </PageTransition>
 
-          </div>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
+            </div>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

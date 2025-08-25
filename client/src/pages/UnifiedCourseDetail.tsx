@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   BookOpen, 
   User, 
@@ -55,6 +56,7 @@ interface CourseVideo {
   duration: number;
   completed: boolean;
   url?: string;
+  type: 'video';
 }
 
 
@@ -145,10 +147,21 @@ interface CourseDetail {
     name: string;
     email?: string;
   };
+  instructorId?: string;
   category: {
     name: string;
   };
+  categoryId?: string;
   courseCode?: string;
+  difficulty?: string;
+  duration?: number;
+  priceCredits?: number;
+  shortDescription?: string;
+  language?: string;
+  tags?: string[];
+  requirements?: string[];
+  learningOutcomes?: string[];
+  updatedAt?: string;
   progress?: {
     videosCompleted: number;
     totalVideos: number;
@@ -216,6 +229,25 @@ const UnifiedCourseDetail = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   
+  // Course settings state
+  const [courseSettings, setCourseSettings] = useState({
+    courseCode: '',
+    difficulty: 'beginner',
+    duration: 0,
+    priceCredits: 0,
+    title: '',
+    description: '',
+    shortDescription: '',
+    language: 'en',
+    tags: [] as string[],
+    requirements: [] as string[],
+    learningOutcomes: [] as string[],
+    instructorId: ''
+  });
+  const [isEditingCourse, setIsEditingCourse] = useState(false);
+  const [savingCourse, setSavingCourse] = useState(false);
+  const [instructors, setInstructors] = useState<any[]>([]);
+  
   // Batch management state
   const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -228,9 +260,7 @@ const UnifiedCourseDetail = () => {
 
   // Helper function to get instructor name safely
   const getInstructorName = () => {
-    if (course?.instructorId?.name) {
-      return course.instructorId.name;
-    } else if (course?.instructor?.name) {
+    if (course?.instructor?.name) {
       return course.instructor.name;
     }
     return 'Unknown Instructor';
@@ -238,9 +268,7 @@ const UnifiedCourseDetail = () => {
 
   // Helper function to get category name safely
   const getCategoryName = () => {
-    if (course?.categoryId?.name) {
-      return course.categoryId.name;
-    } else if (course?.category?.name) {
+    if (course?.category?.name) {
       return course.category.name;
     }
     return 'Uncategorized';
@@ -283,6 +311,56 @@ const UnifiedCourseDetail = () => {
     }
   };
 
+  // Fetch instructors for course assignment
+  const fetchInstructors = async () => {
+    if (!isAdmin) return;
+    
+    try {
+      console.log('Fetching instructors for admin...');
+      const params = new URLSearchParams();
+      params.append('role', 'instructor');
+      params.append('status', 'active');
+      params.append('limit', '100'); // Get all active instructors
+      
+      const response = await adminService.getAllUsers(params);
+      console.log('Instructors response:', response);
+      console.log('Instructors data:', response.data);
+      console.log('Instructors users:', response.data.users);
+      console.log('Instructors count:', response.data.users?.length || 0);
+      setInstructors(response.data.users || []);
+    } catch (error) {
+      console.error('Error fetching instructors:', error);
+      setInstructors([]);
+    }
+  };
+
+  // Initialize course settings when course data loads
+  useEffect(() => {
+    if (course) {
+      setCourseSettings({
+        courseCode: course.courseCode || '',
+        difficulty: course.difficulty || 'beginner',
+        duration: course.duration || 0,
+        priceCredits: course.priceCredits || 0,
+        title: course.title || '',
+        description: course.description || '',
+        shortDescription: course.shortDescription || '',
+        language: course.language || 'en',
+        tags: course.tags || [],
+        requirements: course.requirements || [],
+        learningOutcomes: course.learningOutcomes || [],
+        instructorId: course.instructorId || ''
+      });
+    }
+  }, [course]);
+
+  // Fetch instructors when component loads (admin only)
+  useEffect(() => {
+    if (isAdmin) {
+      fetchInstructors();
+    }
+  }, [isAdmin]);
+
   // Fetch all users for adding to batch
   const fetchAllUsers = async () => {
     if (!isAdmin) return;
@@ -292,6 +370,46 @@ const UnifiedCourseDetail = () => {
       setAllUsers(response.data.users || []);
     } catch (error) {
       console.error('Error fetching all users:', error);
+    }
+  };
+
+  // Save course settings
+  const saveCourseSettings = async () => {
+    if (!courseId) return;
+    
+    setSavingCourse(true);
+    try {
+      const service = isAdmin ? adminService : instructorService;
+      await service.updateCourse(courseId, courseSettings);
+      
+      // Refresh course data
+      let response;
+      if (isAdmin) {
+        response = await adminService.getCourseById(courseId);
+      } else {
+        response = await instructorService.getCourseDetail(courseId);
+      }
+      setCourse(response.data.course);
+      
+      // Refresh enrolled students list if admin
+      if (isAdmin) {
+        await fetchEnrolledStudents();
+      }
+      
+      setIsEditingCourse(false);
+      toast({
+        title: "Success",
+        description: "Course settings updated successfully.",
+      });
+    } catch (error: any) {
+      console.error('Error saving course settings:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to save course settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingCourse(false);
     }
   };
 
@@ -515,7 +633,9 @@ const UnifiedCourseDetail = () => {
           
           try {
             const service = isAdmin ? adminService : instructorService;
-            const response = await service.uploadMaterial(courseId, file);
+            const formData = new FormData();
+            formData.append('material', file);
+            const response = await service.uploadMaterial(courseId, formData);
             
             if (response.success) {
               toast({
@@ -536,12 +656,14 @@ const UnifiedCourseDetail = () => {
         let response;
         if (isAdmin) {
           response = await adminService.getCourseById(courseId);
+          setCourse(response.data);
         } else if (isInstructor) {
           response = await instructorService.getCourseDetail(courseId);
+          setCourse(response.data.course);
         } else {
           response = await courseService.getCourseDetail(courseId);
+          setCourse(response.data.course);
         }
-        setCourse(response.data.course);
         
       } catch (error) {
         toast({
@@ -1411,7 +1533,7 @@ const UnifiedCourseDetail = () => {
                             await adminService.updateCourseStatus(courseId!, course.published ? 'inactive' : 'active');
                             // Refresh course data
                             const response = await adminService.getCourseById(courseId!);
-                            setCourse(response.data.course);
+                            setCourse(response.data);
                             toast({
                               title: "Success",
                               description: `Course ${course.published ? 'unpublished' : 'published'} successfully.`,
@@ -1432,38 +1554,96 @@ const UnifiedCourseDetail = () => {
 
                   {/* Course Information */}
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Course Information</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Course Information</h3>
+                      <div className="flex gap-2">
+                        {isEditingCourse ? (
+                          <>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => {
+                                setIsEditingCourse(false);
+                                // Reset to original values
+                                if (course) {
+                                  setCourseSettings({
+                                    courseCode: course.courseCode || '',
+                                    difficulty: course.difficulty || 'beginner',
+                                    duration: course.duration || 0,
+                                    priceCredits: course.priceCredits || 0,
+                                    title: course.title || '',
+                                    description: course.description || '',
+                                    shortDescription: course.shortDescription || '',
+                                    language: course.language || 'en',
+                                    tags: course.tags || [],
+                                    requirements: course.requirements || [],
+                                    learningOutcomes: course.learningOutcomes || [],
+                                    instructorId: course.instructorId || ''
+                                  });
+                                }
+                              }}
+                              disabled={savingCourse}
+                            >
+                              Cancel
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              onClick={saveCourseSettings}
+                              disabled={savingCourse}
+                            >
+                              {savingCourse ? 'Saving...' : 'Save Changes'}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            className="text-blue-500 hover:text-white border-0 transition-none"
+                            onClick={() => setIsEditingCourse(true)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="courseCode">Course Code</Label>
                         <Input 
                           id="courseCode" 
-                          value={course.courseCode || ''} 
+                          value={courseSettings.courseCode} 
+                          onChange={(e) => setCourseSettings(prev => ({ ...prev, courseCode: e.target.value }))}
                           placeholder="Enter course code"
-                          disabled
+                          disabled={!isEditingCourse}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="difficulty">Difficulty Level</Label>
-                        <select 
-                          id="difficulty"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          value={course.difficulty || 'beginner'}
-                          disabled
+                        <Select 
+                          value={courseSettings.difficulty}
+                          onValueChange={(value) => setCourseSettings(prev => ({ ...prev, difficulty: value as 'beginner' | 'intermediate' | 'advanced' }))}
+                          disabled={!isEditingCourse}
                         >
-                          <option value="beginner">Beginner</option>
-                          <option value="intermediate">Intermediate</option>
-                          <option value="advanced">Advanced</option>
-                        </select>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="beginner">Beginner</SelectItem>
+                            <SelectItem value="intermediate">Intermediate</SelectItem>
+                            <SelectItem value="advanced">Advanced</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="duration">Duration (hours)</Label>
+                        <Label htmlFor="duration">Duration (minutes)</Label>
                         <Input 
                           id="duration" 
                           type="number" 
-                          value={course.duration || 0} 
-                          placeholder="Enter duration"
-                          disabled
+                          value={courseSettings.duration} 
+                          onChange={(e) => setCourseSettings(prev => ({ ...prev, duration: parseInt(e.target.value) || 0 }))}
+                          placeholder="Enter duration in minutes"
+                          disabled={!isEditingCourse}
                         />
                       </div>
                       <div className="space-y-2">
@@ -1471,29 +1651,150 @@ const UnifiedCourseDetail = () => {
                         <Input 
                           id="priceCredits" 
                           type="number" 
-                          value={course.priceCredits || 0} 
-                          placeholder="Enter price"
-                          disabled
+                          value={courseSettings.priceCredits} 
+                          onChange={(e) => setCourseSettings(prev => ({ ...prev, priceCredits: parseInt(e.target.value) || 0 }))}
+                          placeholder="Enter price in credits"
+                          disabled={!isEditingCourse}
+                        />
+                      </div>
+
+                      
+                      {isAdmin && (
+                        <div className="space-y-2">
+                          <Label htmlFor="instructor">Instructor</Label>
+                          <Select 
+                            value={courseSettings.instructorId}
+                            onValueChange={(value) => setCourseSettings(prev => ({ ...prev, instructorId: value }))}
+                            disabled={!isEditingCourse}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={
+                                courseSettings.instructorId 
+                                  ? `Current: ${instructors.find(i => i._id === courseSettings.instructorId)?.name || course.instructor?.name || 'Unknown Instructor'}`
+                                  : "Select instructor"
+                              } />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {instructors.map((instructor) => (
+                                <SelectItem key={instructor._id} value={instructor._id}>
+                                  {instructor.name} ({instructor.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Change the instructor assigned to this course
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Course Title and Description */}
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Course Title</Label>
+                        <Input 
+                          id="title" 
+                          value={courseSettings.title} 
+                          onChange={(e) => setCourseSettings(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="Enter course title"
+                          disabled={!isEditingCourse}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="shortDescription">Short Description</Label>
+                        <Input 
+                          id="shortDescription" 
+                          value={courseSettings.shortDescription} 
+                          onChange={(e) => setCourseSettings(prev => ({ ...prev, shortDescription: e.target.value }))}
+                          placeholder="Enter short description"
+                          disabled={!isEditingCourse}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Full Description</Label>
+                        <Textarea 
+                          id="description" 
+                          value={courseSettings.description} 
+                          onChange={(e) => setCourseSettings(prev => ({ ...prev, description: e.target.value }))}
+                          placeholder="Enter full course description"
+                          rows={4}
+                          disabled={!isEditingCourse}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Language and Tags */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="language">Language</Label>
+                        <Select 
+                          value={courseSettings.language}
+                          onValueChange={(value) => setCourseSettings(prev => ({ ...prev, language: value }))}
+                          disabled={!isEditingCourse}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="en">English</SelectItem>
+                            <SelectItem value="es">Spanish</SelectItem>
+                            <SelectItem value="fr">French</SelectItem>
+                            <SelectItem value="de">German</SelectItem>
+                            <SelectItem value="hi">Hindi</SelectItem>
+                            <SelectItem value="zh">Chinese</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tags">Tags</Label>
+                        <Input 
+                          id="tags" 
+                          value={courseSettings.tags.join(', ')} 
+                          onChange={(e) => setCourseSettings(prev => ({ 
+                            ...prev, 
+                            tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+                          }))}
+                          placeholder="Enter tags separated by commas"
+                          disabled={!isEditingCourse}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Requirements and Learning Outcomes */}
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="requirements">Requirements</Label>
+                        <Textarea 
+                          id="requirements" 
+                          value={courseSettings.requirements.join('\n')} 
+                          onChange={(e) => setCourseSettings(prev => ({ 
+                            ...prev, 
+                            requirements: e.target.value.split('\n').filter(req => req.trim().length > 0)
+                          }))}
+                          placeholder="Enter requirements (one per line)"
+                          rows={3}
+                          disabled={!isEditingCourse}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="learningOutcomes">Learning Outcomes</Label>
+                        <Textarea 
+                          id="learningOutcomes" 
+                          value={courseSettings.learningOutcomes.join('\n')} 
+                          onChange={(e) => setCourseSettings(prev => ({ 
+                            ...prev, 
+                            learningOutcomes: e.target.value.split('\n').filter(outcome => outcome.trim().length > 0)
+                          }))}
+                          placeholder="Enter learning outcomes (one per line)"
+                          rows={3}
+                          disabled={!isEditingCourse}
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Instructor Assignment */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold">Instructor Assignment</h3>
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">Current Instructor</p>
-                        <p className="text-sm text-muted-foreground">
-                          {getInstructorName()} ({course.instructorId?.email || course.instructor?.email})
-                        </p>
-                      </div>
-                      <Button variant="outline" disabled>
-                        Change Instructor
-                      </Button>
-                    </div>
-                  </div>
+
 
                   {/* Category */}
                   <div className="space-y-4">

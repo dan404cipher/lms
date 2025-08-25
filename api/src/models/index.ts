@@ -12,6 +12,7 @@ import './Notification';
 import './Assessment';
 import './Material';
 import './Announcement';
+import './Activity';
 
 // Re-export models for convenience
 export { User } from './User';
@@ -27,3 +28,4 @@ export { Notification } from './Notification';
 export { Assessment } from './Assessment';
 export { Material } from './Material';
 export { Announcement } from './Announcement';
+export { Activity } from './Activity';

@@ -22,6 +22,11 @@ authAxios.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
+    // Don't handle 401 errors for login requests - let them be handled by the login component
+    if (error.response?.status === 401 && originalRequest.url?.includes('/auth/login')) {
+      return Promise.reject(error);
+    }
+    
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
@@ -106,6 +111,21 @@ class AuthService {
 
   async getProfile(): Promise<any> {
     const response = await authAxios.get('/auth/profile');
+    return response.data;
+  }
+
+  async forgotPassword(email: string): Promise<any> {
+    const response = await authAxios.post('/auth/forgot-password', { email });
+    return response.data;
+  }
+
+  async validateResetToken(token: string): Promise<any> {
+    const response = await authAxios.get(`/auth/reset-password/${token}`);
+    return response.data;
+  }
+
+  async resetPassword(token: string, password: string): Promise<any> {
+    const response = await authAxios.post(`/auth/reset-password/${token}`, { password });
     return response.data;
   }
 }

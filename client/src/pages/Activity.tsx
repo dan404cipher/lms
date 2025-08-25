@@ -1,9 +1,15 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 import activityService from "@/services/activityService";
 import { 
@@ -15,98 +21,248 @@ import {
   Clock,
   Play,
   ArrowRight,
-  CheckCircle
+  CheckCircle,
+  Download,
+  Eye,
+  User,
+  LogIn,
+  LogOut,
+  BookOpen,
+  Award,
+  CreditCard,
+  Shield,
+  UserCheck,
+  Filter,
+  Search,
+  Download as DownloadIcon,
+  Trash2,
+  RefreshCw
 } from "lucide-react";
 
 interface Activity {
   _id: string;
-  type: 'live-class' | 'quiz' | 'assignment' | 'discussion' | 'residency';
+  type: string;
   title: string;
-  subtitle: string;
-  instructor: string;
-  date: string;
-  time?: string;
-  duration?: string;
-  status: 'ongoing' | 'upcoming' | 'completed' | 'missed';
-  courseCode?: string;
-  hasRecording?: boolean;
+  description: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  course?: {
+    id: string;
+    title: string;
+    courseCode: string;
+  };
+  targetUser?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  metadata: any;
+  ipAddress?: string;
+  userAgent?: string;
+  formattedDate: string;
+  formattedTime: string;
+  timeAgo: string;
+  createdAt: string;
 }
+
+interface ActivityType {
+  value: string;
+  label: string;
+  icon: string;
+}
+
+
 
 const Activity = () => {
   const { user } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([
+    { value: 'login', label: 'Login', icon: 'log-in' },
+    { value: 'logout', label: 'Logout', icon: 'log-out' },
+    { value: 'course_enrollment', label: 'Course Enrollment', icon: 'book-open' },
+    { value: 'course_completion', label: 'Course Completion', icon: 'check-circle' },
+    { value: 'session_join', label: 'Session Join', icon: 'video' },
+    { value: 'session_leave', label: 'Session Leave', icon: 'video-off' },
+    { value: 'assignment_submit', label: 'Assignment Submit', icon: 'file-text' },
+    { value: 'quiz_attempt', label: 'Quiz Attempt', icon: 'help-circle' },
+    { value: 'quiz_completion', label: 'Quiz Completion', icon: 'check-square' },
+    { value: 'material_download', label: 'Material Download', icon: 'download' },
+    { value: 'profile_update', label: 'Profile Update', icon: 'user' },
+    { value: 'password_reset', label: 'Password Reset', icon: 'key' },
+    { value: 'course_view', label: 'Course View', icon: 'eye' },
+    { value: 'lesson_view', label: 'Lesson View', icon: 'book' },
+    { value: 'discussion_post', label: 'Discussion Post', icon: 'message-square' },
+    { value: 'discussion_reply', label: 'Discussion Reply', icon: 'message-circle' },
+    { value: 'certificate_earned', label: 'Certificate Earned', icon: 'award' },
+    { value: 'payment_made', label: 'Payment Made', icon: 'credit-card' },
+    { value: 'admin_action', label: 'Admin Action', icon: 'shield' },
+    { value: 'instructor_action', label: 'Instructor Action', icon: 'user-check' }
+  ]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    types: {
-      'live-class': false,
-      quiz: false,
-      assignment: false,
-      discussion: false,
-      residency: false
-    },
-    status: {
-      ongoing: false,
-      upcoming: false,
-      completed: false,
-      missed: false
-    }
-  });
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalActivities, setTotalActivities] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedType, setSelectedType] = useState("all");
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
-    const fetchActivities = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await activityService.getMyActivities();
-        setActivities(response.data.activities);
+
+        // Fetch activities and types in parallel
+        const [activitiesResponse, typesResponse] = await Promise.all([
+          activityService.getMyActivities({
+            page: currentPage,
+            limit: 20,
+            type: selectedType === "all" ? undefined : selectedType,
+            courseId: selectedCourse || undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined
+          }),
+          activityService.getActivityTypes()
+        ]);
+
+        setActivities(activitiesResponse.data.activities);
+        setTotalPages(activitiesResponse.data.pagination.pages);
+        setTotalActivities(activitiesResponse.data.pagination.total);
+        if (typesResponse.data.types && typesResponse.data.types.length > 0) {
+          setActivityTypes(typesResponse.data.types);
+        }
       } catch (error) {
-        console.error('Error fetching activities:', error);
-        // Fallback to empty array if API fails
+        console.error('Error fetching data:', error);
+        setError('Failed to load activities. Please try again.');
         setActivities([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchActivities();
-  }, []);
+    fetchData();
+  }, [currentPage, selectedType, selectedCourse, startDate, endDate]);
+
+  const handleSearch = () => {
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setSelectedType("all");
+    setSelectedCourse("");
+    setStartDate("");
+    setEndDate("");
+    setCurrentPage(1);
+  };
+
+  const handleExport = async () => {
+    try {
+      const response = await activityService.exportActivities({
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        type: selectedType === "all" ? undefined : selectedType,
+        courseId: selectedCourse || undefined
+      });
+
+      // Create and download CSV
+      const csvContent = convertToCSV(response.data.activities);
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `activities-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exporting activities:', error);
+    }
+  };
+
+  const convertToCSV = (data: any[]) => {
+    if (data.length === 0) return '';
+    
+    const headers = Object.keys(data[0]);
+    const csvRows = [headers.join(',')];
+    
+    for (const row of data) {
+      const values = headers.map(header => {
+        const value = row[header];
+        return typeof value === 'string' ? `"${value.replace(/"/g, '""')}"` : value;
+      });
+      csvRows.push(values.join(','));
+    }
+    
+    return csvRows.join('\n');
+  };
 
   const getActivityIcon = (type: Activity['type']) => {
     switch (type) {
-      case 'live-class':
+      case 'login':
+        return <LogIn className="h-5 w-5 text-green-600" />;
+      case 'logout':
+        return <LogOut className="h-5 w-5 text-red-600" />;
+      case 'course_enrollment':
+        return <BookOpen className="h-5 w-5 text-blue-600" />;
+      case 'course_completion':
+        return <Award className="h-5 w-5 text-yellow-600" />;
+      case 'session_join':
         return <Video className="h-5 w-5 text-green-600" />;
-      case 'quiz':
-        return <FileText className="h-5 w-5 text-blue-600" />;
-      case 'assignment':
+      case 'session_leave':
+        return <Video className="h-5 w-5 text-red-600" />;
+      case 'assignment_submit':
         return <FileText className="h-5 w-5 text-purple-600" />;
-      case 'discussion':
+      case 'quiz_attempt':
+        return <FileText className="h-5 w-5 text-blue-600" />;
+      case 'quiz_completion':
+        return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'material_download':
+        return <Download className="h-5 w-5 text-indigo-600" />;
+      case 'profile_update':
+        return <User className="h-5 w-5 text-gray-600" />;
+      case 'password_reset':
+        return <User className="h-5 w-5 text-orange-600" />;
+      case 'course_view':
+        return <Eye className="h-5 w-5 text-blue-600" />;
+      case 'lesson_view':
+        return <BookOpen className="h-5 w-5 text-green-600" />;
+      case 'discussion_post':
         return <MessageSquare className="h-5 w-5 text-orange-600" />;
-      case 'residency':
-        return <Building className="h-5 w-5 text-indigo-600" />;
+      case 'discussion_reply':
+        return <MessageSquare className="h-5 w-5 text-blue-600" />;
+      case 'certificate_earned':
+        return <Award className="h-5 w-5 text-yellow-600" />;
+      case 'payment_made':
+        return <CreditCard className="h-5 w-5 text-green-600" />;
+      case 'admin_action':
+        return <Shield className="h-5 w-5 text-red-600" />;
+      case 'instructor_action':
+        return <UserCheck className="h-5 w-5 text-purple-600" />;
       default:
         return <Calendar className="h-5 w-5 text-gray-600" />;
     }
   };
 
-  const getStatusBadge = (status: Activity['status']) => {
-    const statusConfig = {
-      ongoing: { color: "bg-green-100 text-green-800", text: "Ongoing" },
-      upcoming: { color: "bg-blue-100 text-blue-800", text: "Upcoming" },
-      completed: { color: "bg-gray-100 text-gray-800", text: "Completed" },
-      missed: { color: "bg-red-100 text-red-800", text: "Missed" }
-    };
-    
-    const config = statusConfig[status];
-    return (
-      <Badge className={`${config.color} text-xs`}>
-        {config.text}
-      </Badge>
-    );
-  };
+
 
   const filteredActivities = activities.filter(activity => {
-    const typeFilter = Object.values(filters.types).every(v => !v) || filters.types[activity.type];
-    const statusFilter = Object.values(filters.status).every(v => !v) || filters.status[activity.status];
-    return typeFilter && statusFilter;
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        activity.title.toLowerCase().includes(searchLower) ||
+        activity.description.toLowerCase().includes(searchLower) ||
+        activity.user.name.toLowerCase().includes(searchLower) ||
+        activity.user.email.toLowerCase().includes(searchLower) ||
+        (activity.course?.title.toLowerCase().includes(searchLower) || false)
+      );
+    }
+    return true;
   });
 
   if (loading) {
@@ -120,138 +276,233 @@ const Activity = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">
+            <Alert className="max-w-md mx-auto">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
+          <Button onClick={() => window.location.reload()}>
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto">
-        <div className="mb-3">
-          <h1 className="text-xl font-bold text-foreground">Activities</h1>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold text-foreground">Activity Tracking</h1>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={!['admin', 'super_admin'].includes(user?.role || '')}
+            >
+              <DownloadIcon className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.location.reload()}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
-              <div className="flex gap-4">
-        {/* Filter Sidebar */}
-        <div className="w-64 flex-shrink-0">
-          <Card>
-            <CardContent className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">Filter by</h3>
-              
-              {/* Type Filters */}
-              <div className="mb-6">
-                <h4 className="font-medium text-sm text-foreground mb-3">TYPE:</h4>
-                <div className="space-y-2">
-                  {Object.entries(filters.types).map(([type, checked]) => (
-                    <div key={type} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={type}
-                        checked={checked}
-                        onCheckedChange={(checked) => 
-                          setFilters(prev => ({
-                            ...prev,
-                            types: { ...prev.types, [type]: checked as boolean }
-                          }))
-                        }
-                      />
-                      <label htmlFor={type} className="text-sm text-foreground capitalize">
-                        {type.replace('-', ' ')}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Status Filters */}
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Filter className="h-5 w-5" />
+              <span>Filters</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <h4 className="font-medium text-sm text-foreground mb-3">STATUS:</h4>
-                <div className="space-y-2">
-                  {Object.entries(filters.status).map(([status, checked]) => (
-                    <div key={status} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={status}
-                        checked={checked}
-                        onCheckedChange={(checked) => 
-                          setFilters(prev => ({
-                            ...prev,
-                            status: { ...prev.status, [status]: checked as boolean }
-                          }))
-                        }
-                      />
-                      <label htmlFor={status} className="text-sm text-foreground capitalize">
-                        {status}
-                      </label>
-                    </div>
-                  ))}
+                <Label htmlFor="search">Search</Label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Search activities..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <div>
+                <Label htmlFor="type">Activity Type</Label>
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    {Array.isArray(activityTypes) && activityTypes.length > 0 ? (
+                      activityTypes.map((type) => {
+                        try {
+                          return (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          );
+                        } catch (err) {
+                          console.error('Error rendering activity type:', type, err);
+                          return null;
+                        }
+                      }).filter(Boolean)
+                    ) : (
+                      <SelectItem value="loading" disabled>
+                        Loading types...
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 mt-4">
+              <Button onClick={handleSearch} size="sm">
+                Apply Filters
+              </Button>
+              <Button onClick={handleClearFilters} variant="outline" size="sm">
+                Clear Filters
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Activities List */}
-        <div className="flex-1">
-          <div className="space-y-6">
-            {filteredActivities.map((activity) => (
-              <Card key={activity._id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start space-x-4 flex-1">
-                      <div className="flex-shrink-0 mt-1">
-                        {getActivityIcon(activity.type)}
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <p className="text-sm text-muted-foreground">
-                            {activity.subtitle}
-                          </p>
-                          {activity.status === 'completed' && (
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                          )}
-                        </div>
-                        
-                        <h3 className="font-semibold text-foreground mb-2">
-                          {activity.title}
-                        </h3>
-                        
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <span>{activity.date}</span>
-                          {activity.time && (
-                            <>
-                              <span>{activity.time}</span>
-                              <Clock className="h-4 w-4" />
-                            </>
-                          )}
-                          {activity.duration && (
-                            <span>{activity.duration}</span>
-                          )}
-                        </div>
-                      </div>
+        <div className="space-y-4">
+          {filteredActivities.map((activity) => (
+            <Card key={activity._id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-4 flex-1">
+                    <div className="flex-shrink-0 mt-1">
+                      {getActivityIcon(activity.type)}
                     </div>
-
-                    <div className="flex items-center space-x-3">
-                      {getStatusBadge(activity.status)}
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <Badge variant="outline" className="text-xs">
+                          {activity.user.role}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {activity.user.name}
+                        </span>
+                        {activity.course && (
+                          <Badge variant="secondary" className="text-xs">
+                            {activity.course.courseCode}
+                          </Badge>
+                        )}
+                      </div>
                       
-                      {activity.hasRecording ? (
-                        <Button size="sm" variant="default">
-                          <Play className="h-4 w-4 mr-1" />
-                          Watch Recording
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="ghost">
-                          <ArrowRight className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <h3 className="font-semibold text-foreground mb-2">
+                        {activity.title}
+                      </h3>
+                      
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {activity.description}
+                      </p>
+                      
+                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                        <span>{activity.formattedDate}</span>
+                        <span>{activity.formattedTime}</span>
+                        <span>{activity.timeAgo}</span>
+                        {activity.course && (
+                          <span>Course: {activity.course.title}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
 
-          {filteredActivities.length === 0 && (
-            <div className="text-center py-12">
-              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No activities found with the current filters.</p>
-            </div>
-          )}
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline" className="text-xs">
+                      {activity.type.replace('_', ' ')}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-6">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const page = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                  return (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        onClick={() => setCurrentPage(page)}
+                        isActive={currentPage === page}
+                        className="cursor-pointer"
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  );
+                })}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
+
+        {filteredActivities.length === 0 && (
+          <div className="text-center py-12">
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">No activities found with the current filters.</p>
+          </div>
+        )}
       </div>
     </div>
   );

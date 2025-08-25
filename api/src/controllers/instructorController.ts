@@ -10,6 +10,7 @@ import { Announcement } from '../models/Announcement';
 import { Enrollment } from '../models/Enrollment';
 import { User } from '../models/User';
 import { uploadFileLocally } from '../utils/fileUpload';
+import ActivityLogger from '../utils/activityLogger';
 import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
@@ -27,36 +28,10 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
     const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
     console.log('getMyCourses - Is Admin:', isAdmin);
     
-    // Fix existing courses where instructor is assigned but not enrolled
-    if (!isAdmin && req.user.role === 'instructor') {
-      const assignedCourses = await Course.find({ instructorId: req.user._id });
-      for (const course of assignedCourses) {
-        const existingEnrollment = await Enrollment.findOne({ 
-          userId: req.user._id, 
-          courseId: course._id 
-        });
-        
-        if (!existingEnrollment) {
-          console.log('getMyCourses - Auto-enrolling instructor in existing course:', course.title);
-          const newEnrollment = new Enrollment({
-            userId: req.user._id,
-            courseId: course._id,
-            status: 'active',
-            creditsPaid: course.priceCredits || 0,
-            progress: {
-              completedLessons: [],
-              currentLesson: null,
-              completionPercentage: 0,
-              timeSpent: 0,
-              lastAccessedAt: new Date()
-            }
-          });
-          await newEnrollment.save();
-        }
-      }
-    }
+    // Note: Auto-enrollment logic removed - instructors should only see courses they are explicitly enrolled in
+    // through batch management or course settings
     
-    let courses;
+    let courses: any[] = [];
     if (isAdmin) {
       // Admins can see all courses
       console.log('getMyCourses - Fetching all courses for admin');
@@ -65,45 +40,41 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
         .populate('instructorId', 'name')
         .sort({ createdAt: -1 });
     } else {
-      // Instructors can only see courses they teach
+      // Instructors can only see courses they are enrolled in
       console.log('getMyCourses - Fetching courses for instructor ID:', req.user._id);
       
-      // First, let's see all courses in the database to debug
-      const allCourses = await Course.find({})
+      // Get enrollments for this instructor (check all statuses for debugging)
+      const instructorEnrollments = await Enrollment.find({ 
+        userId: req.user._id
+      });
+      
+      // For instructors, we ONLY use enrollment-based logic
+      // This ensures that instructors see courses they are enrolled in through batch management
+      
+      // Filter for active/completed enrollments
+      const activeEnrollments = instructorEnrollments.filter(enrollment => 
+        ['active', 'completed'].includes(enrollment.status)
+      );
+      
+      if (activeEnrollments.length === 0) {
+        courses = [];
+      } else {
+        // Get course IDs from enrollments
+        const courseIds = activeEnrollments.map(enrollment => enrollment.courseId);
+        
+        // Fetch courses where instructor is enrolled
+        courses = await Course.find({ 
+          _id: { $in: courseIds }
+        })
         .populate('categoryId', 'name')
         .populate('instructorId', 'name')
         .sort({ createdAt: -1 });
-      
-      console.log('getMyCourses - All courses in database:');
-      allCourses.forEach(course => {
-        console.log('  Course:', course.title, 'Instructor ID:', course.instructorId._id, 'Instructor Name:', (course.instructorId as any)?.name);
-      });
-      
-      // Now get courses assigned to this instructor
-      courses = await Course.find({ instructorId: req.user._id })
-        .populate('categoryId', 'name')
-        .populate('instructorId', 'name')
-        .sort({ createdAt: -1 });
-      
-      console.log('getMyCourses - Courses assigned to instructor:', req.user._id);
-      courses.forEach(course => {
-        console.log('  Assigned Course:', course.title, 'Instructor ID:', course.instructorId._id, 'Instructor Name:', (course.instructorId as any)?.name);
-      });
-      
-      // Double-check that all returned courses are actually assigned to this instructor
-      courses = courses.filter(course => {
-        const isAssigned = course.instructorId._id.toString() === req.user._id.toString();
-        if (!isAssigned) {
-          console.log('getMyCourses - Filtering out course:', course.title, 'Instructor:', (course.instructorId as any)?.name);
-        }
-        return isAssigned;
-      });
+        
+        // Fetch courses where instructor is enrolled
+      }
     }
     
-    console.log('getMyCourses - Found courses:', courses.length);
-    courses.forEach(course => {
-      console.log('Course:', course.title, 'Instructor:', (course.instructorId as any)?.name);
-    });
+    // Process courses with additional data
 
     const coursesWithStats = await Promise.all(
       courses.map(async (course) => {
@@ -116,7 +87,6 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
           userId: req.user._id, 
           courseId: course._id 
         });
-        console.log('getMyCourses - Course:', course.title, 'Instructor enrolled:', !!instructorEnrollment);
         
         // Calculate average rating (mock for now)
         const averageRating = 4.2;
@@ -142,7 +112,7 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
       })
     );
 
-    console.log('getMyCourses - Returning courses:', coursesWithStats.length);
+    // Return courses with stats
     res.json({
       success: true,
       data: { courses: coursesWithStats }
@@ -450,6 +420,23 @@ export const createCourse = async (req: AuthRequest, res: Response, next: NextFu
     });
 
     await enrollment.save();
+
+    // Log instructor action for course creation
+    await ActivityLogger.logInstructorAction(
+      (req.user as any)._id.toString(),
+      'Course Created',
+      (course as any)._id.toString(),
+      { courseTitle: course.title },
+      req
+    );
+
+    // Log course enrollment for the instructor
+    await ActivityLogger.logCourseEnrollment(
+      (req.user as any)._id.toString(),
+      (course as any)._id.toString(),
+      course.title,
+      req
+    );
 
     console.log('createCourse - Created course and enrolled instructor:', {
       courseId: course._id,

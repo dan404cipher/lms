@@ -614,7 +614,11 @@ const AdminDashboard = () => {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-900 truncate">{course.title}</p>
-                            <p className="text-xs text-gray-600">{course.instructorId?.name}</p>
+                            <p className="text-xs text-gray-600">
+                              {typeof course.instructorId === 'object' && course.instructorId?.name 
+                                ? course.instructorId.name 
+                                : 'Unknown Instructor'}
+                            </p>
                           </div>
                         </div>
                         <div className="text-right">

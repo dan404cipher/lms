@@ -61,6 +61,53 @@ All colors MUST be HSL.
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
+  .light {
+    --background: 220 27% 98%;
+    --foreground: 220 39% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 39% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 39% 11%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 220 27% 98%;
+
+    --secondary: 220 27% 96%;
+    --secondary-foreground: 220 39% 11%;
+
+    --muted: 220 27% 96%;
+    --muted-foreground: 220 14% 46%;
+
+    --accent: 262 83% 58%;
+    --accent-foreground: 220 27% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 27% 98%;
+
+    --border: 220 27% 91%;
+    --input: 220 27% 91%;
+    --ring: 221 83% 53%;
+
+    /* Clean design tokens */
+    --shadow-soft: 0 1px 3px 0 hsl(220 27% 15% / 0.1), 0 1px 2px 0 hsl(220 27% 15% / 0.06);
+    --shadow-medium: 0 4px 6px -1px hsl(220 27% 15% / 0.1), 0 2px 4px -1px hsl(220 27% 15% / 0.06);
+    --shadow-large: 0 10px 15px -3px hsl(220 27% 15% / 0.1), 0 4px 6px -2px hsl(220 27% 15% / 0.05);
+    --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;

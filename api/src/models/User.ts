@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface IUser extends Document {
   name: string;
@@ -22,6 +23,8 @@ export interface IUser extends Document {
   status: 'active' | 'inactive' | 'suspended';
   emailVerified: boolean;
   lastLogin?: Date;
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
   preferences: {
     notifications: {
       email: boolean;
@@ -34,6 +37,7 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  createPasswordResetToken(): string;
 }
 
 const userSchema = new Schema<IUser>({
@@ -94,6 +98,8 @@ const userSchema = new Schema<IUser>({
     default: false
   },
   lastLogin: Date,
+  passwordResetToken: String,
+  passwordResetExpires: Date,
   preferences: {
     notifications: {
       email: { type: Boolean, default: true },
@@ -130,6 +136,20 @@ userSchema.pre('save', async function(next) {
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Create password reset token method
+userSchema.methods.createPasswordResetToken = function(): string {
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  
+  this.passwordResetToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+  
+  this.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  
+  return resetToken;
 };
 
 // Remove password from JSON output
