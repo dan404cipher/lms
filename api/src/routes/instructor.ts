@@ -25,6 +25,7 @@ import {
   updateAssessment,
   deleteAssessment,
   uploadMaterial,
+  downloadMaterial,
   updateMaterial,
   deleteMaterial,
   createAnnouncement,
@@ -89,7 +90,8 @@ router.put('/courses/:courseId/assessments/:assessmentId', updateAssessment);
 router.delete('/courses/:courseId/assessments/:assessmentId', deleteAssessment);
 
 // Material Management
-router.post('/courses/:courseId/materials', upload.single('material'), uploadMaterial);
+router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);
+router.get('/courses/:courseId/materials/:materialId/download', downloadMaterial);
 router.put('/courses/:courseId/materials/:materialId', updateMaterial);
 router.delete('/courses/:courseId/materials/:materialId', deleteMaterial);
 

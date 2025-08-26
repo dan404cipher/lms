@@ -461,14 +461,14 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       title: course.title,
       description: course.description,
       shortDescription: course.shortDescription,
-      instructorId: (course.instructorId as any)._id,
+      instructorId: (course.instructorId as any)?._id || course.instructorId,
       instructor: {
-        name: (course.instructorId as any).name,
-        email: (course.instructorId as any).email
+        name: (course.instructorId as any)?.name || 'Unknown Instructor',
+        email: (course.instructorId as any)?.email || 'No email'
       },
-      categoryId: (course.categoryId as any)._id,
+      categoryId: (course.categoryId as any)?._id || course.categoryId,
       category: {
-        name: (course.categoryId as any).name
+        name: (course.categoryId as any)?.name || 'Uncategorized'
       },
       courseCode: course.courseCode,
       published: course.published,
@@ -1459,6 +1459,75 @@ export const createAnnouncement = async (req: AuthRequest, res: Response, next: 
   }
 };
 
+// @desc    Download material (Admin only)
+// @route   GET /api/admin/courses/:courseId/materials/:materialId/download
+// @access  Private (Admin)
+export const downloadMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { materialId } = req.params;
+
+    // Find the material
+    const material = await Material.findById(materialId).populate('courseId');
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Check if material has a file URL
+    if (!material.fileUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material file not available'
+      });
+    }
+
+    // Increment download count
+    await Material.findByIdAndUpdate(materialId, { $inc: { downloads: 1 } });
+
+    // Log the download activity
+    if (materialId) {
+      await ActivityLogger.logMaterialDownload(
+        req.user._id,
+        materialId,
+        material.title,
+        material.courseId._id.toString(),
+        material.fileSize || 0,
+        req
+      );
+    }
+
+    // If it's a local file, serve it directly
+    if (material.fileUrl.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), material.fileUrl.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for file download
+        res.setHeader('Content-Type', material.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${material.fileName || material.title}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.json({
+      success: true,
+      message: 'Material download initiated',
+      data: {
+        downloadUrl: material.fileUrl,
+        fileName: material.fileName || material.title
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Upload material (Admin only)
 // @route   POST /api/admin/courses/:courseId/materials
 // @access  Private (Admin)
@@ -1481,12 +1550,19 @@ export const uploadMaterial = async (req: AuthRequest, res: Response, next: Next
       });
     }
 
+    // Upload file locally
+    const uploadResult = await uploadFileLocally(req.file, 'materials');
+    
     const material = new Material({
       courseId,
+      instructorId: req.user._id, // Admin uploading the material
       title: req.file.originalname,
       description: `Uploaded material: ${req.file.originalname}`,
-      type: req.file.mimetype,
-      fileUrl: req.file.path,
+      type: 'document',
+      fileUrl: uploadResult.Location,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
       isPublished: true
     });
 

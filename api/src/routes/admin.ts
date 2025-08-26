@@ -23,6 +23,7 @@ import {
   createAssessment,
   createAnnouncement,
   uploadMaterial,
+  downloadMaterial,
   uploadLessonContent,
   getSystemStats,
   getSystemHealth,
@@ -157,7 +158,8 @@ router.post('/courses/:courseId/modules', createModule);
 router.post('/courses/:courseId/modules/:moduleId/lessons', createLesson);
 router.post('/courses/:courseId/assessments', createAssessment);
 router.post('/courses/:courseId/announcements', createAnnouncement);
-router.post('/courses/:courseId/materials', upload.single('material'), uploadMaterial);
+router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);
+router.get('/courses/:courseId/materials/:materialId/download', downloadMaterial);
 router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 
 // System Statistics Routes

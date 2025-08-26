@@ -23,6 +23,7 @@ interface AuthRequest extends Request {
 export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     console.log('getMyCourses - User ID:', req.user._id, 'Role:', req.user.role);
+    console.log('getMyCourses - Auth headers:', req.headers.authorization ? 'Present' : 'Missing');
     
     // Check if user is admin (admins can see all courses)
     const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
@@ -761,16 +762,116 @@ export const createAssessment = async (req: AuthRequest, res: Response, next: Ne
 };
 
 // Material Management
+export const downloadMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { materialId } = req.params;
+    const userId = req.user._id;
+
+    // Find the material
+    const material = await Material.findById(materialId).populate('courseId');
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Check if user has access to this material (enrolled in course)
+    const enrollment = await Enrollment.findOne({
+      userId: userId,
+      courseId: material.courseId,
+      status: { $in: ['active', 'completed'] }
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: 'You must be enrolled in this course to access materials'
+      });
+    }
+
+    // Check if material has a file URL
+    if (!material.fileUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material file not available'
+      });
+    }
+
+    // Increment download count
+    await Material.findByIdAndUpdate(materialId, { $inc: { downloads: 1 } });
+
+    // Log the download activity
+    if (materialId) {
+      await ActivityLogger.logMaterialDownload(
+        userId,
+        materialId.toString(),
+        material.title,
+        material.courseId._id.toString(),
+        material.fileSize || 0,
+        req
+      );
+    }
+
+    // If it's a local file, serve it directly
+    if (material.fileUrl.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), material.fileUrl.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for file download
+        res.setHeader('Content-Type', material.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${material.fileName || material.title}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.json({
+      success: true,
+      message: 'Material download initiated',
+      data: {
+        downloadUrl: material.fileUrl,
+        fileName: material.fileName || material.title
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const uploadMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
+    console.log('uploadMaterial - Starting upload process');
+    console.log('uploadMaterial - User ID:', req.user._id, 'Role:', req.user.role);
+    console.log('uploadMaterial - Course ID:', req.params.courseId);
+    console.log('uploadMaterial - File present:', !!req.file);
+    
     const courseId = req.params.courseId;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
-    if (!course) {
+    // Check if instructor is enrolled in the course
+    const enrollment = await Enrollment.findOne({ 
+      userId: userId, 
+      courseId: courseId,
+      status: { $in: ['active', 'completed'] }
+    });
+    
+    if (!enrollment) {
       return res.status(404).json({
         success: false,
         message: 'Course not found or you do not have permission to access it'
+      });
+    }
+    
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
       });
     }
 

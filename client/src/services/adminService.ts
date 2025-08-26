@@ -362,6 +362,13 @@ class AdminService {
     return response.data;
   }
 
+  async downloadMaterial(courseId: string, materialId: string): Promise<Blob> {
+    const response = await adminAxios.get(`/admin/courses/${courseId}/materials/${materialId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
+
   async uploadLessonContent(courseId: string, moduleId: string, lessonId: string, formData: FormData): Promise<AdminResponse<any>> {
     const response = await adminAxios.post(`/admin/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content`, formData, {
       headers: {

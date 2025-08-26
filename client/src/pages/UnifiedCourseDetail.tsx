@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
-import adminService from "@/services/adminService";
+import adminService, { Course } from "@/services/adminService";
 import ScheduleSessionModal from "@/components/ScheduleSessionModal";
 import SessionsAndRecordings from "@/components/SessionsAndRecordings";
 
@@ -588,8 +588,73 @@ const UnifiedCourseDetail = () => {
     console.log('Viewing resource:', resource);
   };
 
-  const handleDownloadResource = (resource: CourseResource) => {
-    console.log('Downloading resource:', resource);
+  const handleDownloadResource = async (resource: CourseResource) => {
+    if (!resource.url) {
+      toast({
+        title: "Download Failed",
+        description: "No download URL available for this resource",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    try {
+      // Create download link
+      const link = document.createElement('a');
+      link.href = resource.url;
+      link.download = resource.title;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Success",
+        description: `${resource.title} download initiated!`
+      });
+    } catch (error) {
+      console.error('Error downloading resource:', error);
+      toast({
+        title: "Download Failed",
+        description: `Failed to download ${resource.title}`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDownloadMaterial = async (material: any) => {
+    if (!courseId) return;
+    
+    try {
+      setLoading(true);
+      
+      const service = isAdmin ? adminService : instructorService;
+      const blob = await service.downloadMaterial(courseId, material._id);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = material.fileName || material.title;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Success",
+        description: `${material.title} downloaded successfully!`
+      });
+    } catch (error) {
+      console.error('Error downloading material:', error);
+      toast({
+        title: "Download Failed",
+        description: `Failed to download ${material.title}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleViewVideo = (video: CourseVideo) => {
@@ -632,6 +697,12 @@ const UnifiedCourseDetail = () => {
           });
           
           try {
+            console.log('Upload attempt - User role:', user?.role);
+            console.log('Upload attempt - Is admin:', isAdmin);
+            console.log('Upload attempt - Is instructor:', isInstructor);
+            console.log('Upload attempt - Course ID:', courseId);
+            console.log('Upload attempt - File:', file.name, file.size);
+            
             const service = isAdmin ? adminService : instructorService;
             const formData = new FormData();
             formData.append('material', file);
@@ -656,13 +727,13 @@ const UnifiedCourseDetail = () => {
         let response;
         if (isAdmin) {
           response = await adminService.getCourseById(courseId);
-          setCourse(response.data);
+          setCourse(response.data as CourseDetail);
         } else if (isInstructor) {
           response = await instructorService.getCourseDetail(courseId);
-          setCourse(response.data.course);
+          setCourse(response.data.course as CourseDetail);
         } else {
           response = await courseService.getCourseDetail(courseId);
-          setCourse(response.data.course);
+          setCourse(response.data.course as CourseDetail);
         }
         
       } catch (error) {
@@ -1231,7 +1302,7 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <Badge variant="outline" className="text-xs">{material.type}</Badge>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" onClick={() => handleDownloadMaterial(material)}>
                           <Download className="h-4 w-4" />
                         </Button>
                       </div>
@@ -1331,11 +1402,9 @@ const UnifiedCourseDetail = () => {
           <TabsContent value="batch" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Users className="h-5 w-5" />
-                  <span>Course Users Management</span>
+                <CardTitle>
+                  {/* Batch Management */}
                 </CardTitle>
-
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

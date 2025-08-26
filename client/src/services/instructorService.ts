@@ -183,6 +183,13 @@ const instructorService = {
     return response.data;
   },
 
+  async downloadMaterial(courseId: string, materialId: string): Promise<Blob> {
+    const response = await instructorAxios.get(`/instructor/courses/${courseId}/materials/${materialId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
   async updateMaterial(courseId: string, materialId: string, materialData: any) {
     const response = await instructorAxios.put(`/instructor/courses/${courseId}/materials/${materialId}`, materialData);
     return response.data;
