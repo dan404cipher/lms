@@ -75,8 +75,6 @@ interface ActivityType {
   icon: string;
 }
 
-
-
 const Activity = () => {
   const { user } = useAuth();
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -112,45 +110,90 @@ const Activity = () => {
   const [selectedCourse, setSelectedCourse] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [isFiltering, setIsFiltering] = useState(false);
 
+  // Debounced search effect
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // Fetch activities and types in parallel
-        const [activitiesResponse, typesResponse] = await Promise.all([
-          activityService.getMyActivities({
-            page: currentPage,
-            limit: 20,
-            type: selectedType === "all" ? undefined : selectedType,
-            courseId: selectedCourse || undefined,
-            startDate: startDate || undefined,
-            endDate: endDate || undefined
-          }),
-          activityService.getActivityTypes()
-        ]);
-
-        setActivities(activitiesResponse.data.activities);
-        setTotalPages(activitiesResponse.data.pagination.pages);
-        setTotalActivities(activitiesResponse.data.pagination.total);
-        if (typesResponse.data.types && typesResponse.data.types.length > 0) {
-          setActivityTypes(typesResponse.data.types);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setError('Failed to load activities. Please try again.');
-        setActivities([]);
-      } finally {
-        setLoading(false);
+    const timeoutId = setTimeout(() => {
+      if (searchTerm !== "") {
+        setCurrentPage(1);
+        fetchActivities();
       }
-    };
+    }, 500);
 
-    fetchData();
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  // Main fetch effect for filters and pagination
+  useEffect(() => {
+    fetchActivities();
   }, [currentPage, selectedType, selectedCourse, startDate, endDate]);
 
-  const handleSearch = () => {
+  const fetchActivities = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Build filter parameters
+      const filterParams: any = {
+        page: currentPage,
+        limit: 20,
+      };
+
+      // Only add filters if they have values
+      if (selectedType && selectedType !== "all") {
+        filterParams.type = selectedType;
+      }
+
+      if (selectedCourse && selectedCourse !== "") {
+        filterParams.courseId = selectedCourse;
+      }
+
+      if (startDate && startDate !== "") {
+        filterParams.startDate = startDate;
+      }
+
+      if (endDate && endDate !== "") {
+        filterParams.endDate = endDate;
+      }
+
+      if (searchTerm && searchTerm.trim() !== "") {
+        filterParams.search = searchTerm.trim();
+      }
+
+      console.log('Fetching activities with params:', filterParams);
+
+      // Fetch activities and types in parallel
+      const [activitiesResponse, typesResponse] = await Promise.all([
+        activityService.getMyActivities(filterParams),
+        activityService.getActivityTypes()
+      ]);
+
+      console.log('Activities response:', activitiesResponse);
+
+      if (activitiesResponse?.data) {
+        setActivities(activitiesResponse.data.activities || []);
+        setTotalPages(activitiesResponse.data.pagination?.pages || 1);
+        setTotalActivities(activitiesResponse.data.pagination?.total || 0);
+      }
+
+      if (typesResponse?.data?.types && typesResponse.data.types.length > 0) {
+        setActivityTypes(typesResponse.data.types);
+      }
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+      setError('Failed to load activities. Please try again.');
+      setActivities([]);
+    } finally {
+      setLoading(false);
+      setIsFiltering(false);
+    }
+  };
+
+  const handleApplyFilters = () => {
     setCurrentPage(1);
+    setIsFiltering(true);
+    fetchActivities();
   };
 
   const handleClearFilters = () => {
@@ -160,16 +203,35 @@ const Activity = () => {
     setStartDate("");
     setEndDate("");
     setCurrentPage(1);
+    setIsFiltering(true);
+    // Fetch activities will be triggered by useEffect
   };
 
   const handleExport = async () => {
     try {
-      const response = await activityService.exportActivities({
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        type: selectedType === "all" ? undefined : selectedType,
-        courseId: selectedCourse || undefined
-      });
+      const exportParams: any = {};
+
+      if (startDate && startDate !== "") {
+        exportParams.startDate = startDate;
+      }
+
+      if (endDate && endDate !== "") {
+        exportParams.endDate = endDate;
+      }
+
+      if (selectedType && selectedType !== "all") {
+        exportParams.type = selectedType;
+      }
+
+      if (selectedCourse && selectedCourse !== "") {
+        exportParams.courseId = selectedCourse;
+      }
+
+      if (searchTerm && searchTerm.trim() !== "") {
+        exportParams.search = searchTerm.trim();
+      }
+
+      const response = await activityService.exportActivities(exportParams);
 
       // Create and download CSV
       const csvContent = convertToCSV(response.data.activities);
@@ -182,6 +244,7 @@ const Activity = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error exporting activities:', error);
+      setError('Failed to export activities. Please try again.');
     }
   };
 
@@ -249,23 +312,11 @@ const Activity = () => {
     }
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
-
-  const filteredActivities = activities.filter(activity => {
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        activity.title.toLowerCase().includes(searchLower) ||
-        activity.description.toLowerCase().includes(searchLower) ||
-        activity.user.name.toLowerCase().includes(searchLower) ||
-        activity.user.email.toLowerCase().includes(searchLower) ||
-        (activity.course?.title.toLowerCase().includes(searchLower) || false)
-      );
-    }
-    return true;
-  });
-
-  if (loading) {
+  if (loading && !isFiltering) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
@@ -285,7 +336,10 @@ const Activity = () => {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           </div>
-          <Button onClick={() => window.location.reload()}>
+          <Button onClick={() => {
+            setError(null);
+            fetchActivities();
+          }}>
             Try Again
           </Button>
         </div>
@@ -297,13 +351,18 @@ const Activity = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-foreground">Activity Tracking</h1>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Activity Tracking</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Showing {activities.length} of {totalActivities} activities
+            </p>
+          </div>
           <div className="flex items-center space-x-2">
             <Button
               variant="outline"
               size="sm"
               onClick={handleExport}
-              disabled={!['admin', 'super_admin'].includes(user?.role || '')}
+              disabled={!['admin', 'super_admin'].includes(user?.role || '') || loading}
             >
               <DownloadIcon className="h-4 w-4 mr-2" />
               Export
@@ -311,15 +370,14 @@ const Activity = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.location.reload()}
+              onClick={fetchActivities}
+              disabled={loading}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
         </div>
-
-
 
         {/* Filters */}
         <Card className="mb-6">
@@ -327,6 +385,7 @@ const Activity = () => {
             <CardTitle className="flex items-center space-x-2">
               <Filter className="h-5 w-5" />
               <span>Filters</span>
+              {isFiltering && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -393,10 +452,19 @@ const Activity = () => {
               </div>
             </div>
             <div className="flex items-center space-x-2 mt-4">
-              <Button onClick={handleSearch} size="sm">
-                Apply Filters
+              <Button 
+                onClick={handleApplyFilters} 
+                size="sm" 
+                disabled={isFiltering}
+              >
+                {isFiltering ? 'Applying...' : 'Apply Filters'}
               </Button>
-              <Button onClick={handleClearFilters} variant="outline" size="sm">
+              <Button 
+                onClick={handleClearFilters} 
+                variant="outline" 
+                size="sm"
+                disabled={isFiltering}
+              >
                 Clear Filters
               </Button>
             </div>
@@ -405,58 +473,70 @@ const Activity = () => {
 
         {/* Activities List */}
         <div className="space-y-4">
-          {filteredActivities.map((activity) => (
-            <Card key={activity._id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4 flex-1">
-                    <div className="flex-shrink-0 mt-1">
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <Badge variant="outline" className="text-xs">
-                          {activity.user.role}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {activity.user.name}
-                        </span>
-                        {activity.course && (
-                          <Badge variant="secondary" className="text-xs">
-                            {activity.course.courseCode}
+          {activities.length > 0 ? (
+            activities.map((activity) => (
+              <Card key={activity._id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4 flex-1">
+                      <div className="flex-shrink-0 mt-1">
+                        {getActivityIcon(activity.type)}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <Badge variant="outline" className="text-xs">
+                            {activity.user.role}
                           </Badge>
-                        )}
-                      </div>
-                      
-                      <h3 className="font-semibold text-foreground mb-2">
-                        {activity.title}
-                      </h3>
-                      
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {activity.description}
-                      </p>
-                      
-                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                        <span>{activity.formattedDate}</span>
-                        <span>{activity.formattedTime}</span>
-                        <span>{activity.timeAgo}</span>
-                        {activity.course && (
-                          <span>Course: {activity.course.title}</span>
-                        )}
+                          <span className="text-sm text-muted-foreground">
+                            {activity.user.name}
+                          </span>
+                          {activity.course && (
+                            <Badge variant="secondary" className="text-xs">
+                              {activity.course.courseCode}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <h3 className="font-semibold text-foreground mb-2">
+                          {activity.title}
+                        </h3>
+                        
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {activity.description}
+                        </p>
+                        
+                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                          <span>{activity.formattedDate}</span>
+                          <span>{activity.formattedTime}</span>
+                          <span>{activity.timeAgo}</span>
+                          {activity.course && (
+                            <span>Course: {activity.course.title}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="text-xs">
-                      {activity.type.replace('_', ' ')}
-                    </Badge>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline" className="text-xs">
+                        {activity.type.replace(/_/g, ' ')}
+                      </Badge>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">
+                {searchTerm || selectedType !== "all" || selectedCourse || startDate || endDate
+                  ? "No activities found with the current filters."
+                  : "No activities found."
+                }
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Pagination */}
@@ -466,7 +546,7 @@ const Activity = () => {
               <PaginationContent>
                 <PaginationItem>
                   <PaginationPrevious 
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                   />
                 </PaginationItem>
@@ -476,7 +556,7 @@ const Activity = () => {
                   return (
                     <PaginationItem key={page}>
                       <PaginationLink
-                        onClick={() => setCurrentPage(page)}
+                        onClick={() => handlePageChange(page)}
                         isActive={currentPage === page}
                         className="cursor-pointer"
                       >
@@ -488,19 +568,12 @@ const Activity = () => {
                 
                 <PaginationItem>
                   <PaginationNext 
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                   />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
-          </div>
-        )}
-
-        {filteredActivities.length === 0 && (
-          <div className="text-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No activities found with the current filters.</p>
           </div>
         )}
       </div>

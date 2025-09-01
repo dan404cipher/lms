@@ -244,10 +244,11 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 
     const user = await User.findOne({ email });
     if (!user) {
-      // Don't reveal if user exists or not for security
+      console.log('user',user)
+
       res.json({
         success: true,
-        message: 'If an account with that email exists, a password reset link has been sent.'
+        message: 'No account found with this email'
       });
       return;
     }
@@ -383,6 +384,17 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
       });
       return;
     }
+
+     // Check if the new password is the same as the current password
+     const isSamePassword = await user.comparePassword(password);
+    
+     if (isSamePassword) {
+       res.status(400).json({
+         success: false,
+         message: 'New password  be the same as your current password'
+       });
+       return;
+     }
 
     // Update password
     user.password = password;

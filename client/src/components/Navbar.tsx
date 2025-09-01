@@ -170,7 +170,7 @@ const Navbar = memo(() => {
           </div>
 
           {/* Search Bar */}
-          <div className="hidden md:flex items-center space-x-4 flex-1 max-w-md mx-8">
+         { location.pathname ==="/courses" &&<div className="hidden md:flex items-center space-x-4 flex-1 max-w-md mx-8">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -178,7 +178,7 @@ const Navbar = memo(() => {
                 className="pl-10 bg-muted/50 border-muted-foreground/20 focus:border-primary"
               />
             </div>
-          </div>
+          </div>}
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">

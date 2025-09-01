@@ -74,10 +74,10 @@ const CourseCard = ({
           </div>
         </div>
 
-        <Button className="w-full" variant="hero">
+        {/* <Button className="w-full" variant="hero">
           <BookOpen className="h-4 w-4 mr-2" />
           View Course
-        </Button>
+        </Button> */}
       </div>
     </div>
   );
