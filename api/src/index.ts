@@ -44,38 +44,79 @@ import { setupSocketIO } from './config/socket';
 
 const app = express();
 const server = createServer(app);
+
+// Define allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:8080'
+];
+
+// Add environment-specific origins
+if (process.env.CORS_ORIGIN) {
+  allowedOrigins.push(process.env.CORS_ORIGIN);
+}
+
+// Socket.IO setup with consistent CORS
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true
   }
 });
 
 const PORT = process.env.PORT || 5000;
 
-// Security middleware with custom CSP for PDF embedding
+// CORS configuration - BEFORE other middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With', 
+    'Content-Type', 
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'Pragma'
+  ],
+  exposedHeaders: ['set-cookie'],
+  optionsSuccessStatus: 200 // For legacy browser support
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
+// Security middleware with relaxed CSP for development
 app.use(helmet({
-  contentSecurityPolicy: {
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", ...allowedOrigins],
       fontSrc: ["'self'"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'self'", "data:", "blob:"],
-      frameAncestors: ["'self'", "http://localhost:8080", "http://localhost:3000"],
-      sandbox: ["allow-same-origin", "allow-scripts", "allow-forms", "allow-popups", "allow-modals"]
+      frameAncestors: ["'self'", ...allowedOrigins]
     }
-  }
-}));
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:8080",
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  } : false, // Disable CSP in development
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // Rate limiting - Disabled for development
@@ -100,7 +141,8 @@ app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    cors: allowedOrigins
   });
 });
 
@@ -120,25 +162,46 @@ app.use('/api/instructor', instructorRoutes);
 app.use('/api/recordings', recordingRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Serve uploaded files with CORS headers and iframe support
+// Serve uploaded files with enhanced CORS headers
 app.use('/uploads', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin as string) || !origin) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
   res.header('X-Frame-Options', 'SAMEORIGIN');
-  res.header('Content-Security-Policy', "frame-ancestors 'self' http://localhost:8080 http://localhost:3000");
+  
+  // Handle OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  
   next();
 }, express.static(path.join(__dirname, '../uploads')));
 
-// Serve recording files with CORS headers
+// Serve recording files with enhanced CORS headers
 app.use('/recordings', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin as string) || !origin) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
   res.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  
+  // Handle OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);``
+    return;
+  }
+  
   next();
 }, express.static(path.join(__dirname, '../recordings')));
 
@@ -161,6 +224,7 @@ const startServer = async () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
+      console.log(`🌐 Allowed CORS origins:`, allowedOrigins);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

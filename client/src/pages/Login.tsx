@@ -216,7 +216,7 @@ const Login = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Instructor:</span>
-              <span className="font-mono">jane@example.com / password123</span>
+              <span className="font-mono">ai.specialist@example.com / password123</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Learner:</span>

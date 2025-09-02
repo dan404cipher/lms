@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  BookOpen, 
-  User, 
+import {
+  BookOpen,
+  User,
   Calendar,
   Clock,
   Play,
@@ -34,6 +35,8 @@ import {
   Upload,
   Search,
   Users,
+  ChevronLeft,
+  Trash,
 } from "lucide-react";
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
@@ -200,10 +203,11 @@ const UnifiedCourseDetail = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  
+
   // Debug logging
   console.log('UnifiedCourseDetail - courseId:', courseId, 'user:', user?.role);
   const [course, setCourse] = useState<CourseDetail | null>(null);
+  console.log('course', course);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => {
     const savedTab = localStorage.getItem(`courseTab_${courseId}`);
@@ -228,7 +232,8 @@ const UnifiedCourseDetail = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  
+  const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null);
+
   // Course settings state
   const [courseSettings, setCourseSettings] = useState({
     courseCode: '',
@@ -247,7 +252,7 @@ const UnifiedCourseDetail = () => {
   const [isEditingCourse, setIsEditingCourse] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
   const [instructors, setInstructors] = useState<any[]>([]);
-  
+
   // Batch management state
   const [enrolledStudents, setEnrolledStudents] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -296,7 +301,7 @@ const UnifiedCourseDetail = () => {
       console.log('fetchEnrolledStudents: Skipping - courseId:', courseId, 'isAdmin:', isAdmin);
       return;
     }
-    
+
     try {
       setBatchLoading(true);
       console.log('Fetching enrolled students for courseId:', courseId);
@@ -314,14 +319,14 @@ const UnifiedCourseDetail = () => {
   // Fetch instructors for course assignment
   const fetchInstructors = async () => {
     if (!isAdmin) return;
-    
+
     try {
       console.log('Fetching instructors for admin...');
       const params = new URLSearchParams();
       params.append('role', 'instructor');
       params.append('status', 'active');
       params.append('limit', '100'); // Get all active instructors
-      
+
       const response = await adminService.getAllUsers(params);
       console.log('Instructors response:', response);
       console.log('Instructors data:', response.data);
@@ -364,7 +369,7 @@ const UnifiedCourseDetail = () => {
   // Fetch all users for adding to batch
   const fetchAllUsers = async () => {
     if (!isAdmin) return;
-    
+
     try {
       const response = await adminService.getAllUsers();
       setAllUsers(response.data.users || []);
@@ -376,12 +381,12 @@ const UnifiedCourseDetail = () => {
   // Save course settings
   const saveCourseSettings = async () => {
     if (!courseId) return;
-    
+
     setSavingCourse(true);
     try {
       const service = isAdmin ? adminService : instructorService;
       await service.updateCourse(courseId, courseSettings);
-      
+
       // Refresh course data
       let response;
       if (isAdmin) {
@@ -390,12 +395,12 @@ const UnifiedCourseDetail = () => {
         response = await instructorService.getCourseDetail(courseId);
       }
       setCourse(response.data.course);
-      
+
       // Refresh enrolled students list if admin
       if (isAdmin) {
         await fetchEnrolledStudents();
       }
-      
+
       setIsEditingCourse(false);
       toast({
         title: "Success",
@@ -443,7 +448,7 @@ const UnifiedCourseDetail = () => {
         return;
       }
     }
-    
+
     try {
       setBatchLoading(true);
       console.log('Adding users to course - courseId:', courseId, 'userIds:', userIds);
@@ -451,13 +456,13 @@ const UnifiedCourseDetail = () => {
       console.log('userIds array length:', userIds.length);
       console.log('userIds content:', JSON.stringify(userIds, null, 2));
       await adminService.addStudentsToCourse(courseId, userIds);
-      
+
       toast({
         title: "Success",
         description: `${userIds.length} user(s) added to the course.`,
       });
       setSelectedUsers([]);
-      
+
       // Refresh the enrolled students list
       await fetchEnrolledStudents();
     } catch (error) {
@@ -481,16 +486,16 @@ const UnifiedCourseDetail = () => {
   // Remove student from course
   const removeStudentFromCourse = async (studentId: string) => {
     if (!courseId) return;
-    
+
     try {
       setBatchLoading(true);
       await adminService.removeStudentFromCourse(courseId, studentId);
-      
+
       toast({
         title: "Success",
         description: "Student removed from course.",
       });
-      
+
       // Refresh the enrolled students list
       await fetchEnrolledStudents();
     } catch (error) {
@@ -503,53 +508,53 @@ const UnifiedCourseDetail = () => {
       setBatchLoading(false);
     }
   };
+  const fetchCourseDetail = async () => {
+    if (!courseId || authLoading) return; // Wait for auth to load
+
+    try {
+      setLoading(true);
+      let response;
+      if (isAdmin) {
+        response = await adminService.getCourseById(courseId);
+      } else if (isInstructor) {
+        response = await instructorService.getCourseDetail(courseId);
+      } else {
+        response = await courseService.getCourseDetail(courseId);
+      }
+
+      setCourse(response.data.course);
+      console.log('course session', response.data.course);
+    } catch (error: any) {
+      console.error('Error fetching course detail:', error);
+      if (error.response?.status === 403) {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to access this course.",
+          variant: "destructive",
+        });
+        navigate('/courses');
+      } else if (error.response?.status === 404) {
+        toast({
+          title: "Course Not Found",
+          description: "The course you're looking for doesn't exist.",
+          variant: "destructive",
+        });
+        navigate('/courses');
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to load course details. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCourseDetail = async () => {
-      if (!courseId || authLoading) return; // Wait for auth to load
-      
-      try {
-        setLoading(true);
-        let response;
-        if (isAdmin) {
-          response = await adminService.getCourseById(courseId);
-        } else if (isInstructor) {
-          response = await instructorService.getCourseDetail(courseId);
-        } else {
-          response = await courseService.getCourseDetail(courseId);
-        }
-        
-        setCourse(response.data.course);
-      } catch (error: any) {
-        console.error('Error fetching course detail:', error);
-        if (error.response?.status === 403) {
-          toast({
-            title: "Access Denied",
-            description: "You don't have permission to access this course.",
-            variant: "destructive",
-          });
-          navigate('/courses');
-        } else if (error.response?.status === 404) {
-          toast({
-            title: "Course Not Found",
-            description: "The course you're looking for doesn't exist.",
-            variant: "destructive",
-          });
-          navigate('/courses');
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to load course details. Please try again.",
-            variant: "destructive",
-          });
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCourseDetail();
-  }, [courseId, isInstructor, isAdmin, authLoading]);
+  }, [courseId, isInstructor, isAdmin, authLoading, isScheduleModalOpen]);
 
   // Fetch users when batch tab is active
   useEffect(() => {
@@ -570,8 +575,8 @@ const UnifiedCourseDetail = () => {
   }, [course, isAdmin, courseId]);
 
   const toggleModule = (moduleId: string) => {
-    setExpandedModules(prev => 
-      prev.includes(moduleId) 
+    setExpandedModules(prev =>
+      prev.includes(moduleId)
         ? prev.filter(id => id !== moduleId)
         : [...prev, moduleId]
     );
@@ -597,7 +602,7 @@ const UnifiedCourseDetail = () => {
       });
       return;
     }
-    
+
     try {
       // Create download link
       const link = document.createElement('a');
@@ -607,7 +612,7 @@ const UnifiedCourseDetail = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast({
         title: "Success",
         description: `${resource.title} download initiated!`
@@ -624,13 +629,13 @@ const UnifiedCourseDetail = () => {
 
   const handleDownloadMaterial = async (material: any) => {
     if (!courseId) return;
-    
+
     try {
       setLoading(true);
-      
+
       const service = isAdmin ? adminService : instructorService;
       const blob = await service.downloadMaterial(courseId, material._id);
-      
+
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -640,7 +645,7 @@ const UnifiedCourseDetail = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       toast({
         title: "Success",
         description: `${material.title} downloaded successfully!`
@@ -663,23 +668,23 @@ const UnifiedCourseDetail = () => {
 
   const handleUploadMaterial = () => {
     if (!courseId) return;
-    
+
     // Create file input element
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.multiple = true;
     fileInput.accept = '*/*'; // Accept any file type
     fileInput.style.display = 'none';
-    
+
     fileInput.onchange = async (event) => {
       const target = event.target as HTMLInputElement;
       const files = target.files;
-      
+
       if (!files || files.length === 0) return;
-      
+
       try {
         setLoading(true);
-        
+
         for (const file of Array.from(files)) {
           // Check file size (100MB limit for materials)
           if (file.size > 100 * 1024 * 1024) {
@@ -690,24 +695,24 @@ const UnifiedCourseDetail = () => {
             });
             continue;
           }
-          
+
           toast({
             title: "Uploading...",
             description: `Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB)`,
           });
-          
+
           try {
             console.log('Upload attempt - User role:', user?.role);
             console.log('Upload attempt - Is admin:', isAdmin);
             console.log('Upload attempt - Is instructor:', isInstructor);
             console.log('Upload attempt - Course ID:', courseId);
             console.log('Upload attempt - File:', file.name, file.size);
-            
+
             const service = isAdmin ? adminService : instructorService;
             const formData = new FormData();
             formData.append('material', file);
             const response = await service.uploadMaterial(courseId, formData);
-            
+
             if (response.success) {
               toast({
                 title: "Success",
@@ -722,7 +727,7 @@ const UnifiedCourseDetail = () => {
             });
           }
         }
-        
+
         // Refresh course data to show new materials
         let response;
         if (isAdmin) {
@@ -735,7 +740,7 @@ const UnifiedCourseDetail = () => {
           response = await courseService.getCourseDetail(courseId);
           setCourse(response.data.course as CourseDetail);
         }
-        
+
       } catch (error) {
         toast({
           title: "Error",
@@ -747,19 +752,19 @@ const UnifiedCourseDetail = () => {
         document.body.removeChild(fileInput);
       }
     };
-    
+
     document.body.appendChild(fileInput);
     fileInput.click();
   };
 
   const handleFormSubmit = async () => {
     if (!courseId || !formData.title.trim()) return;
-    
+
     setIsSubmitting(true);
     try {
       // Choose the appropriate service based on user role
       const service = isAdmin ? adminService : instructorService;
-      
+
       switch (showAddForm) {
         case 'module':
           await service.createModule(courseId, {
@@ -796,13 +801,13 @@ const UnifiedCourseDetail = () => {
             });
             return;
           }
-          
+
           // Create FormData for file upload
           const materialFormData = new FormData();
           materialFormData.append('title', formData.title);
           materialFormData.append('description', formData.description || '');
           materialFormData.append('material', selectedFiles[0]);
-          
+
           await service.uploadMaterial(courseId, materialFormData);
           break;
         case 'lesson':
@@ -823,7 +828,7 @@ const UnifiedCourseDetail = () => {
         default:
           break;
       }
-      
+
       // Refresh course data
       let response;
       if (isAdmin) {
@@ -834,17 +839,17 @@ const UnifiedCourseDetail = () => {
         response = await courseService.getCourseDetail(courseId);
       }
       setCourse(response.data.course);
-      
+
       // Show success message
       toast({
         title: "Success!",
-        description: `${showAddForm === 'module' ? 'Module' : 
-                      showAddForm === 'assessment' ? 'Assessment' : 
-                      showAddForm === 'session' ? 'Session' : 
-                      showAddForm === 'announcement' ? 'Announcement' : 
-                      showAddForm === 'lesson' ? 'Lesson' : 'Item'} created successfully.`,
+        description: `${showAddForm === 'module' ? 'Module' :
+          showAddForm === 'assessment' ? 'Assessment' :
+            showAddForm === 'session' ? 'Session' :
+              showAddForm === 'announcement' ? 'Announcement' :
+                showAddForm === 'lesson' ? 'Lesson' : 'Item'} created successfully.`,
       });
-      
+
       // Reset form and close modal
       setFormData({
         title: '',
@@ -863,7 +868,7 @@ const UnifiedCourseDetail = () => {
     } catch (error: any) {
       console.error('Error creating item:', error);
       let errorMessage = "Failed to create item. Please try again.";
-      
+
       if (error.response?.status === 404) {
         errorMessage = "Module not found. The database has been refreshed. Please refresh the page.";
       } else if (error.response?.status === 401) {
@@ -873,7 +878,7 @@ const UnifiedCourseDetail = () => {
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
+
       toast({
         title: "Error",
         description: errorMessage,
@@ -892,6 +897,66 @@ const UnifiedCourseDetail = () => {
     console.log('Viewing recording:', recording);
   };
 
+
+  const handleDeleteLesson = (lessonId: string) => {
+    setDeleteLessonId(lessonId);
+  };
+
+  const confirmDeleteLesson = async () => {
+    if (!courseId || !deleteLessonId) {
+      toast({
+        title: "Error",
+        description: "Course ID or Lesson ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Find the module that contains this lesson
+    const module = course?.modules?.find(m => 
+      m.lessons.some(l => l._id === deleteLessonId)
+    );
+
+    if (!module) {
+      toast({
+        title: "Error",
+        description: "Module not found for this lesson",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await instructorService.deleteLesson(courseId, module._id, deleteLessonId);
+      
+      // Update the local state to remove the lesson
+      setCourse(prevCourse => {
+        if (!prevCourse) return null;
+        return {
+          ...prevCourse,
+          modules: prevCourse.modules?.map(m => 
+            m._id === module._id 
+              ? { ...m, lessons: m.lessons.filter(l => l._id !== deleteLessonId) }
+              : m
+          )
+        };
+      });
+
+      toast({
+        title: "Success",
+        description: "Lesson deleted successfully",
+      });
+    } catch (error: any) {
+      console.error('Error deleting lesson:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete lesson",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteLessonId(null);
+    }
+  };
 
 
   if (authLoading) {
@@ -923,7 +988,7 @@ const UnifiedCourseDetail = () => {
           <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">Course Not Found</h2>
           <p className="text-muted-foreground mb-4">The course you're looking for doesn't exist or you don't have access to it.</p>
-                      <Button size="sm" onClick={() => navigate('/courses')}>Back to Courses</Button>
+          <Button size="sm" onClick={() => navigate('/courses')}>Back to Courses</Button>
         </div>
       </div>
     );
@@ -934,29 +999,34 @@ const UnifiedCourseDetail = () => {
       {/* Header */}
       <div className="mb-3">
         <div className="flex items-start justify-between mb-4">
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-foreground mb-2">{course.title}</h1>
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-              <div className="flex items-center space-x-1">
-                <User className="h-4 w-4" />
-                <span>{getInstructorName()}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <BookOpen className="h-4 w-4" />
-                <span>{getCategoryName()}</span>
-              </div>
-              {course.courseCode && (
+          <div className="flex-1 flex gap-5 items-center">
+            <div className="flex items-center gap-5 cursor-pointer" onClick={() => navigate('/courses')}>
+              <ChevronLeft />
+            </div>
+            <div className="flex flex-col ">
+              <h1 className="text-xl font-bold text-foreground mb-2">{course.title}</h1>
+              <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                 <div className="flex items-center space-x-1">
-                  <span>Code: {course.courseCode}</span>
+                  <User className="h-4 w-4" />
+                  <span>{getInstructorName()}</span>
                 </div>
-              )}
-              {isAdmin && (
                 <div className="flex items-center space-x-1">
-                  <Badge variant={course.published ? "default" : "secondary"}>
-                    {course.published ? "Published" : "Draft"}
-                  </Badge>
+                  <BookOpen className="h-4 w-4" />
+                  <span>{getCategoryName()}</span>
                 </div>
-              )}
+                {course.courseCode && (
+                  <div className="flex items-center space-x-1">
+                    <span>Code: {course.courseCode}</span>
+                  </div>
+                )}
+                {isAdmin && (
+                  <div className="flex items-center space-x-1">
+                    <Badge variant={course.published ? "default" : "secondary"}>
+                      {course.published ? "Published" : "Draft"}
+                    </Badge>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1003,7 +1073,7 @@ const UnifiedCourseDetail = () => {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {/* Course Stats */}
             <Card>
               <CardHeader>
@@ -1049,7 +1119,7 @@ const UnifiedCourseDetail = () => {
             </Card>
 
             {/* Syllabus */}
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <FileText className="h-5 w-5" />
@@ -1084,10 +1154,10 @@ const UnifiedCourseDetail = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Prerequisites */}
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Target className="h-5 w-5" />
@@ -1119,7 +1189,7 @@ const UnifiedCourseDetail = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Course Info for Admin */}
             {isAdmin && (
@@ -1175,7 +1245,7 @@ const UnifiedCourseDetail = () => {
                 <div className="space-y-3">
                   {course.modules.map((module) => (
                     <div key={module._id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
-                      <div 
+                      <div
                         className="flex items-center justify-between cursor-pointer"
                         onClick={() => toggleModule(module._id)}
                       >
@@ -1192,13 +1262,13 @@ const UnifiedCourseDetail = () => {
                           <ChevronRight className="h-4 w-4" />
                         )}
                       </div>
-                      
+
                       {expandedModules.includes(module._id) && (
                         <div className="mt-3 space-y-2">
                           <p className="text-sm text-muted-foreground">{module.description}</p>
                           {module.lessons.map((lesson) => (
-                            <div 
-                              key={lesson._id} 
+                            <div
+                              key={lesson._id}
                               className="flex items-center justify-between p-2 border rounded bg-background hover:bg-muted/50 transition-colors cursor-pointer"
                               onClick={() => navigate(`/courses/${courseId}/lessons/${lesson._id}`)}
                             >
@@ -1221,8 +1291,8 @@ const UnifiedCourseDetail = () => {
                                       <Download className="h-3 w-3" />
                                     </Button>
                                   )}
-                                  <Button 
-                                    variant="ghost" 
+                                  <Button
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => {
                                       setSelectedLessonId(lesson._id);
@@ -1231,8 +1301,8 @@ const UnifiedCourseDetail = () => {
                                   >
                                     <Upload className="h-4 w-4" />
                                   </Button>
-                                  <Button 
-                                    variant="ghost" 
+                                  <Button
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => navigate(`/courses/${courseId}/lessons/${lesson._id}`)}
                                   >
@@ -1241,15 +1311,24 @@ const UnifiedCourseDetail = () => {
                                   <Button variant="ghost" size="sm">
                                     <Edit className="h-4 w-4" />
                                   </Button>
+                                  {(isInstructor || isAdmin) && (
+                                    <div 
+                                      className="bg-red-400 text-white p-1 rounded-lg cursor-pointer hover:bg-red-500 transition-colors" 
+                                      onClick={() => handleDeleteLesson(lesson._id)}
+                                      title="Delete lesson"
+                                    >
+                                      <Trash className="h-4 w-4" />
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
                           ))}
                           {(isInstructor || isAdmin) && (
                             <div className="pt-2 border-t">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() => {
                                   setSelectedModuleId(module._id);
                                   setShowFileUpload(true);
@@ -1356,12 +1435,12 @@ const UnifiedCourseDetail = () => {
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Badge 
+                            <Badge
                               variant={
                                 session.status === 'completed' ? 'default' :
-                                session.status === 'live' ? 'destructive' :
-                                session.status === 'cancelled' ? 'secondary' :
-                                'outline'
+                                  session.status === 'live' ? 'destructive' :
+                                    session.status === 'cancelled' ? 'secondary' :
+                                      'outline'
                               }
                             >
                               {session.status}
@@ -1416,7 +1495,7 @@ const UnifiedCourseDetail = () => {
                         {enrolledStudents.length} users
                       </Badge>
                     </div>
-                    
+
                     {batchLoading ? (
                       <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
@@ -1475,13 +1554,13 @@ const UnifiedCourseDetail = () => {
                         />
                       </div>
                     </div>
-                    
+
                     <div className="max-h-96 overflow-y-auto space-y-2">
                       {allUsers
-                        .filter(user => 
-                          (searchTerm === '' || 
-                           user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           user.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
+                        .filter(user =>
+                          (searchTerm === '' ||
+                            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            user.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
                           !enrolledStudents.some(enrolled => enrolled._id === user._id)
                         )
                         .map((user) => (
@@ -1489,7 +1568,7 @@ const UnifiedCourseDetail = () => {
                             key={user._id}
                             className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
                             onClick={() => {
-                              setSelectedUsers(prev => 
+                              setSelectedUsers(prev =>
                                 prev.includes(user._id)
                                   ? prev.filter(id => id !== user._id)
                                   : [...prev, user._id]
@@ -1527,17 +1606,17 @@ const UnifiedCourseDetail = () => {
                         ))}
                     </div>
 
-                    {allUsers.filter(user => 
+                    {allUsers.filter(user =>
                       !enrolledStudents.some(enrolled => enrolled._id === user._id)
                     ).length === 0 && (
-                      <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
-                        <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">No users available</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          All users are already in this course.
-                        </p>
-                      </div>
-                    )}
+                        <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+                          <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground">No users available</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            All users are already in this course.
+                          </p>
+                        </div>
+                      )}
                   </div>
                 </div>
 
@@ -1594,7 +1673,7 @@ const UnifiedCourseDetail = () => {
                           {course.published ? 'Published' : 'Draft'} - {course.published ? 'Course is visible to students' : 'Course is in draft mode'}
                         </p>
                       </div>
-                      <Button 
+                      <Button
                         size="sm"
                         variant={course.published ? "outline" : "default"}
                         onClick={async () => {
@@ -1602,7 +1681,7 @@ const UnifiedCourseDetail = () => {
                             await adminService.updateCourseStatus(courseId!, course.published ? 'inactive' : 'active');
                             // Refresh course data
                             const response = await adminService.getCourseById(courseId!);
-                            setCourse(response.data);
+                            setCourse((response.data) as any);
                             toast({
                               title: "Success",
                               description: `Course ${course.published ? 'unpublished' : 'published'} successfully.`,
@@ -1628,8 +1707,8 @@ const UnifiedCourseDetail = () => {
                       <div className="flex gap-2">
                         {isEditingCourse ? (
                           <>
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => {
                                 setIsEditingCourse(false);
@@ -1655,8 +1734,8 @@ const UnifiedCourseDetail = () => {
                             >
                               Cancel
                             </Button>
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               onClick={saveCourseSettings}
                               disabled={savingCourse}
                             >
@@ -1664,8 +1743,8 @@ const UnifiedCourseDetail = () => {
                             </Button>
                           </>
                         ) : (
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="ghost"
                             className="text-blue-500 hover:text-white border-0 transition-none"
                             onClick={() => setIsEditingCourse(true)}
@@ -1675,13 +1754,13 @@ const UnifiedCourseDetail = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="courseCode">Course Code</Label>
-                        <Input 
-                          id="courseCode" 
-                          value={courseSettings.courseCode} 
+                        <Input
+                          id="courseCode"
+                          value={courseSettings.courseCode}
                           onChange={(e) => setCourseSettings(prev => ({ ...prev, courseCode: e.target.value }))}
                           placeholder="Enter course code"
                           disabled={!isEditingCourse}
@@ -1689,7 +1768,7 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="difficulty">Difficulty Level</Label>
-                        <Select 
+                        <Select
                           value={courseSettings.difficulty}
                           onValueChange={(value) => setCourseSettings(prev => ({ ...prev, difficulty: value as 'beginner' | 'intermediate' | 'advanced' }))}
                           disabled={!isEditingCourse}
@@ -1706,10 +1785,10 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="duration">Duration (minutes)</Label>
-                        <Input 
-                          id="duration" 
-                          type="number" 
-                          value={courseSettings.duration} 
+                        <Input
+                          id="duration"
+                          type="number"
+                          value={courseSettings.duration}
                           onChange={(e) => setCourseSettings(prev => ({ ...prev, duration: parseInt(e.target.value) || 0 }))}
                           placeholder="Enter duration in minutes"
                           disabled={!isEditingCourse}
@@ -1717,28 +1796,28 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="priceCredits">Price (credits)</Label>
-                        <Input 
-                          id="priceCredits" 
-                          type="number" 
-                          value={courseSettings.priceCredits} 
+                        <Input
+                          id="priceCredits"
+                          type="number"
+                          value={courseSettings.priceCredits}
                           onChange={(e) => setCourseSettings(prev => ({ ...prev, priceCredits: parseInt(e.target.value) || 0 }))}
                           placeholder="Enter price in credits"
                           disabled={!isEditingCourse}
                         />
                       </div>
 
-                      
+
                       {isAdmin && (
                         <div className="space-y-2">
                           <Label htmlFor="instructor">Instructor</Label>
-                          <Select 
+                          <Select
                             value={courseSettings.instructorId}
                             onValueChange={(value) => setCourseSettings(prev => ({ ...prev, instructorId: value }))}
                             disabled={!isEditingCourse}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder={
-                                courseSettings.instructorId 
+                                courseSettings.instructorId
                                   ? `Current: ${instructors.find(i => i._id === courseSettings.instructorId)?.name || course.instructor?.name || 'Unknown Instructor'}`
                                   : "Select instructor"
                               } />
@@ -1762,9 +1841,9 @@ const UnifiedCourseDetail = () => {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="title">Course Title</Label>
-                        <Input 
-                          id="title" 
-                          value={courseSettings.title} 
+                        <Input
+                          id="title"
+                          value={courseSettings.title}
                           onChange={(e) => setCourseSettings(prev => ({ ...prev, title: e.target.value }))}
                           placeholder="Enter course title"
                           disabled={!isEditingCourse}
@@ -1772,9 +1851,9 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="shortDescription">Short Description</Label>
-                        <Input 
-                          id="shortDescription" 
-                          value={courseSettings.shortDescription} 
+                        <Input
+                          id="shortDescription"
+                          value={courseSettings.shortDescription}
                           onChange={(e) => setCourseSettings(prev => ({ ...prev, shortDescription: e.target.value }))}
                           placeholder="Enter short description"
                           disabled={!isEditingCourse}
@@ -1782,9 +1861,9 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="description">Full Description</Label>
-                        <Textarea 
-                          id="description" 
-                          value={courseSettings.description} 
+                        <Textarea
+                          id="description"
+                          value={courseSettings.description}
                           onChange={(e) => setCourseSettings(prev => ({ ...prev, description: e.target.value }))}
                           placeholder="Enter full course description"
                           rows={4}
@@ -1797,7 +1876,7 @@ const UnifiedCourseDetail = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="language">Language</Label>
-                        <Select 
+                        <Select
                           value={courseSettings.language}
                           onValueChange={(value) => setCourseSettings(prev => ({ ...prev, language: value }))}
                           disabled={!isEditingCourse}
@@ -1817,11 +1896,11 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="tags">Tags</Label>
-                        <Input 
-                          id="tags" 
-                          value={courseSettings.tags.join(', ')} 
-                          onChange={(e) => setCourseSettings(prev => ({ 
-                            ...prev, 
+                        <Input
+                          id="tags"
+                          value={courseSettings.tags.join(', ')}
+                          onChange={(e) => setCourseSettings(prev => ({
+                            ...prev,
                             tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
                           }))}
                           placeholder="Enter tags separated by commas"
@@ -1834,11 +1913,11 @@ const UnifiedCourseDetail = () => {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="requirements">Requirements</Label>
-                        <Textarea 
-                          id="requirements" 
-                          value={courseSettings.requirements.join('\n')} 
-                          onChange={(e) => setCourseSettings(prev => ({ 
-                            ...prev, 
+                        <Textarea
+                          id="requirements"
+                          value={courseSettings.requirements.join('\n')}
+                          onChange={(e) => setCourseSettings(prev => ({
+                            ...prev,
                             requirements: e.target.value.split('\n').filter(req => req.trim().length > 0)
                           }))}
                           placeholder="Enter requirements (one per line)"
@@ -1848,11 +1927,11 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="learningOutcomes">Learning Outcomes</Label>
-                        <Textarea 
-                          id="learningOutcomes" 
-                          value={courseSettings.learningOutcomes.join('\n')} 
-                          onChange={(e) => setCourseSettings(prev => ({ 
-                            ...prev, 
+                        <Textarea
+                          id="learningOutcomes"
+                          value={courseSettings.learningOutcomes.join('\n')}
+                          onChange={(e) => setCourseSettings(prev => ({
+                            ...prev,
                             learningOutcomes: e.target.value.split('\n').filter(outcome => outcome.trim().length > 0)
                           }))}
                           placeholder="Enter learning outcomes (one per line)"
@@ -1944,7 +2023,7 @@ const UnifiedCourseDetail = () => {
                             Permanently delete this course and all its content. This action cannot be undone.
                           </p>
                         </div>
-                        <Button 
+                        <Button
                           variant="destructive"
                           onClick={async () => {
                             if (confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
@@ -2001,7 +2080,7 @@ const UnifiedCourseDetail = () => {
               {showAddForm === 'lesson' && 'Create a new lesson within the selected module.'}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-4 py-4">
             {/* Title Field */}
             <div className="grid grid-cols-4 items-center gap-4">
@@ -2032,7 +2111,6 @@ const UnifiedCourseDetail = () => {
               />
             </div>
 
-            {/* Conditional Fields Based on Form Type */}
             {showAddForm === 'module' && (
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="order" className="text-right">
@@ -2042,7 +2120,12 @@ const UnifiedCourseDetail = () => {
                   id="order"
                   type="number"
                   value={formData.order}
-                  onChange={(e) => handleInputChange('order', parseInt(e.target.value))}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    if (value > 0 || e.target.value === '') {
+                      handleInputChange('order', value || '');
+                    }
+                  }}
                   className="col-span-3"
                   min="1"
                 />
@@ -2242,26 +2325,26 @@ const UnifiedCourseDetail = () => {
               {selectedLessonId ? 'Upload Files to Lesson' : 'Add Files to Module'}
             </DialogTitle>
             <DialogDescription>
-              {selectedLessonId 
+              {selectedLessonId
                 ? 'Upload files to add content to this lesson. All file types are accepted.'
                 : 'Upload files to create a new lesson in this module. All file types are accepted.'
               }
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">
                 {selectedLessonId ? 'Lesson' : 'Module'}
               </Label>
               <div className="col-span-3 text-sm text-muted-foreground">
-                {selectedLessonId 
+                {selectedLessonId
                   ? course.modules?.flatMap(m => m.lessons)?.find(l => l._id === selectedLessonId)?.title || 'Unknown Lesson'
                   : course.modules?.find(m => m._id === selectedModuleId)?.title || 'Unknown Module'
                 }
               </div>
             </div>
-            
+
             {!selectedLessonId && (
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="lessonTitle" className="text-right">
@@ -2319,7 +2402,7 @@ const UnifiedCourseDetail = () => {
                 });
                 return;
               }
-              
+
               if (!selectedFiles || selectedFiles.length === 0) {
                 toast({
                   title: "Error",
@@ -2328,10 +2411,10 @@ const UnifiedCourseDetail = () => {
                 });
                 return;
               }
-              
+
               try {
                 setIsSubmitting(true);
-                
+
                 if (!selectedLessonId) {
                   // Create new lesson first
                   const service = isAdmin ? adminService : instructorService;
@@ -2340,18 +2423,18 @@ const UnifiedCourseDetail = () => {
                     description: formData.description || '',
                     order: formData.order
                   });
-                  
+
                   const newLessonId = lessonResponse.data.lesson._id;
-                  
+
                   // Upload files to the new lesson
                   for (let i = 0; i < selectedFiles.length; i++) {
                     const file = selectedFiles[i];
                     const formData = new FormData();
                     formData.append('content', file);
-                    
+
                     await service.uploadLessonContent(courseId!, selectedModuleId!, newLessonId, formData);
                   }
-                  
+
                   toast({
                     title: "Success!",
                     description: `Lesson created and ${selectedFiles.length} file(s) uploaded successfully.`,
@@ -2363,21 +2446,21 @@ const UnifiedCourseDetail = () => {
                     const file = selectedFiles[i];
                     const formData = new FormData();
                     formData.append('content', file);
-                    
+
                     await service.uploadLessonContent(courseId!, selectedModuleId!, selectedLessonId, formData);
                   }
-                  
+
                   toast({
                     title: "Success!",
                     description: `${selectedFiles.length} file(s) uploaded successfully.`,
                   });
                 }
-                
+
                 setShowFileUpload(false);
                 setSelectedLessonId(null);
                 setSelectedModuleId(null);
                 setSelectedFiles(null);
-                
+
                 // Refresh course data
                 let response;
                 if (isAdmin) {
@@ -2391,7 +2474,7 @@ const UnifiedCourseDetail = () => {
               } catch (error: any) {
                 console.error('Error:', error);
                 let errorMessage = "Failed to upload files. Please try again.";
-                
+
                 if (error.response?.status === 404) {
                   errorMessage = "Lesson or module not found. Please refresh the page and try again.";
                 } else if (error.response?.status === 401) {
@@ -2403,7 +2486,7 @@ const UnifiedCourseDetail = () => {
                 } else if (error.response?.data?.message) {
                   errorMessage = error.response.data.message;
                 }
-                
+
                 toast({
                   title: "Error",
                   description: errorMessage,
@@ -2445,6 +2528,23 @@ const UnifiedCourseDetail = () => {
         }}
       />
 
+      {/* Delete Lesson Confirmation Dialog */}
+      <AlertDialog open={!!deleteLessonId} onOpenChange={(open) => !open && setDeleteLessonId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Lesson</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this lesson? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteLesson} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

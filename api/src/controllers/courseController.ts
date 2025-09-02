@@ -122,6 +122,7 @@ export const getCourse = async (req: AuthRequest, res: Response, next: NextFunct
         message: 'Course not found'
       });
     }
+    console.log('course',course);
 
     // Only show published courses to non-instructors
     if (!course.published && req.user?.role !== 'instructor' && req.user?.role !== 'admin') {
@@ -981,6 +982,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
           }))
       }))
     };
+    console.log('courseDetail',courseDetail)
 
     res.json({
       success: true,

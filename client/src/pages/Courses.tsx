@@ -419,7 +419,7 @@ const Courses = () => {
                 </DialogDescription>
               </DialogHeader>
               
-              <form onSubmit={handleCreateCourse} className="space-y-4">
+              <form onSubmit={handleCreateCourse} className="space-y-4" noValidate>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="title">Course Title *</Label>

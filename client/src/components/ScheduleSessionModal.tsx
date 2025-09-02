@@ -82,12 +82,88 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
     }
   };
 
-  // Handle form submission
+  // Helper function to check if a date is in the past
+  const isPastDateTime = (date: string, time: string) => {
+    const selectedDateTime = new Date(`${date}T${time}`);
+    const now = new Date();
+    return selectedDateTime < now;
+  };
+
+  // Helper function to get minimum selectable date (today)
+  const getMinDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  // Helper function to get minimum selectable time for today
+  const getMinTimeForDate = (date: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (date === today) {
+      // If it's today, minimum time should be current time + 30 minutes buffer
+      const now = new Date();
+      now.setMinutes(now.getMinutes() + 30);
+      return now.toTimeString().slice(0, 5);
+    }
+    return "00:00"; // For future dates, any time is allowed
+  };
+
+  // Validate date selection
+  const handleDateChange = (newDate: string) => {
+    const minDate = getMinDate();
+    
+    if (newDate < minDate) {
+      toast({
+        title: "Invalid Date",
+        description: "Cannot schedule sessions in the past. Please select today or a future date.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setSelectedDate(newDate);
+    
+    // If selecting today and current time is in the past, update time
+    if (newDate === minDate && selectedTime) {
+      const minTime = getMinTimeForDate(newDate);
+      if (selectedTime < minTime) {
+        setSelectedTime(minTime);
+      }
+    }
+  };
+
+  // Validate time selection
+  const handleTimeChange = (newTime: string) => {
+    if (selectedDate) {
+      const minTime = getMinTimeForDate(selectedDate);
+      
+      if (selectedDate === getMinDate() && newTime < minTime) {
+        toast({
+          title: "Invalid Time",
+          description: "Cannot schedule sessions in the past. Please select a future time.",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+    
+    setSelectedTime(newTime);
+  };
+
+  // Handle form submission with validation
   const handleSubmit = async () => {
     if (!courseId || !sessionName.trim() || !selectedDate || !selectedTime) {
       toast({
         title: "Validation Error",
         description: "Please fill in all required fields.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Additional validation for past date/time
+    if (isPastDateTime(selectedDate, selectedTime)) {
+      toast({
+        title: "Invalid Schedule",
+        description: "Cannot schedule sessions in the past. Please select a future date and time.",
         variant: "destructive"
       });
       return;
@@ -169,6 +245,34 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
     if (hour < 12) return 'Morning';
     if (hour < 17) return 'Afternoon';
     return 'Evening';
+  };
+
+  // Check if a date is in the past
+  const isDateInPast = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+  };
+
+  // Check if a time slot is in the past for today
+  const isTimeSlotInPast = (time: string) => {
+    if (!selectedDate) return false;
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (selectedDate !== today) return false;
+    
+    const now = new Date();
+    const [hours, minutes] = time.split(':');
+    const timeDate = new Date();
+    timeDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    
+    // Add 30 minutes buffer
+    const minTime = new Date();
+    minTime.setMinutes(minTime.getMinutes() + 30);
+    
+    return timeDate < minTime;
   };
 
   if (!isOpen) return null;
@@ -297,8 +401,17 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
               <div className="space-y-4">
                 <Label>Date & Time *</Label>
                 
+                {/* Validation Warning */}
+                {selectedDate && selectedTime && isPastDateTime(selectedDate, selectedTime) && (
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <p className="text-sm text-destructive">
+                      ⚠️ Selected time is in the past. Please choose a future date and time.
+                    </p>
+                  </div>
+                )}
+                
                 {/* Selected Date & Time Display */}
-                {selectedDate && selectedTime && (
+                {selectedDate && selectedTime && !isPastDateTime(selectedDate, selectedTime) && (
                   <div className="p-4 bg-muted/20 rounded-lg border">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                       <Calendar className="h-4 w-4" />
@@ -325,8 +438,8 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                       id="date"
                       type="date"
                       value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => handleDateChange(e.target.value)}
+                      min={getMinDate()}
                       required
                     />
                   </div>
@@ -338,7 +451,8 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                         value={selectedTime ? selectedTime.split(':')[0] : '10'} 
                         onValueChange={(hour) => {
                           const currentMinute = selectedTime ? selectedTime.split(':')[1] : '00';
-                          setSelectedTime(`${hour.padStart(2, '0')}:${currentMinute}`);
+                          const newTime = `${hour.padStart(2, '0')}:${currentMinute}`;
+                          handleTimeChange(newTime);
                         }}
                       >
                         <SelectTrigger className="w-20">
@@ -360,7 +474,8 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                         value={selectedTime ? selectedTime.split(':')[1] : '00'} 
                         onValueChange={(minute) => {
                           const currentHour = selectedTime ? selectedTime.split(':')[0] : '10';
-                          setSelectedTime(`${currentHour}:${minute.padStart(2, '0')}`);
+                          const newTime = `${currentHour}:${minute.padStart(2, '0')}`;
+                          handleTimeChange(newTime);
                         }}
                       >
                         <SelectTrigger className="w-20">
@@ -388,7 +503,8 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                             newHour -= 12;
                           }
                           
-                          setSelectedTime(`${newHour.toString().padStart(2, '0')}:${minute}`);
+                          const newTime = `${newHour.toString().padStart(2, '0')}:${minute}`;
+                          handleTimeChange(newTime);
                         }}
                       >
                         <SelectTrigger className="w-16">
@@ -434,7 +550,10 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
             {/* Calendar Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">
-                <Button variant="outline" size="sm" onClick={() => setCurrentWeek(new Date())}>
+                <Button variant="outline" size="sm" onClick={() => {
+                  setCurrentWeek(new Date())
+                  handleDateChange(new Date().toISOString().split('T')[0])
+                  }}>
                   Today
                 </Button>
                 <div className="flex items-center gap-2">
@@ -476,17 +595,27 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                     const date = weekDates[index];
                     const isToday = date.toDateString() === new Date().toDateString();
                     const isSelected = selectedDate === date.toISOString().split('T')[0];
+                    const isPast = isDateInPast(date);
                     
                     return (
                       <div 
                         key={day} 
-                        className="text-center p-2 cursor-pointer hover:bg-muted/50 rounded"
-                        onClick={() => setSelectedDate(date.toISOString().split('T')[0])}
+                        className={`text-center p-2 rounded cursor-pointer transition-colors ${
+                          isPast 
+                            ? 'opacity-50 cursor-not-allowed' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                        onClick={() => {
+                          if (!isPast) {
+                            handleDateChange(date.toISOString().split('T')[0]);
+                          }
+                        }}
                       >
                         <div className="text-xs font-medium text-muted-foreground">{day}</div>
                         <div className={`text-sm font-medium mt-1 w-8 h-8 rounded-full flex items-center justify-center mx-auto ${
                           isSelected ? 'bg-primary text-primary-foreground' : 
-                          isToday ? 'bg-muted text-foreground' : ''
+                          isToday ? 'bg-muted text-foreground' : 
+                          isPast ? 'text-muted-foreground' : ''
                         }`}>
                           {date.getDate()}
                         </div>
@@ -498,6 +627,11 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                 {/* Time Selection */}
                 <div className="mb-3">
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">Select Time</h3>
+                  {selectedDate === new Date().toISOString().split('T')[0] && (
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Times in the past are disabled. Sessions need at least 30 minutes advance notice.
+                    </p>
+                  )}
                 </div>
                 
                 {/* Time Slots Grid */}
@@ -505,22 +639,34 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
                   <div className="space-y-1">
                     {timeSlots.map((time) => {
                       const isSelected = selectedTime === time;
+                      const isPast = isTimeSlotInPast(time);
                       
                       return (
                         <div 
                           key={time} 
-                          className={`p-3 rounded-lg cursor-pointer transition-all ${
-                            isSelected 
-                              ? 'bg-primary text-primary-foreground shadow-sm' 
-                              : 'hover:bg-muted/50 border border-transparent hover:border-border'
+                          className={`p-3 rounded-lg transition-all ${
+                            isPast
+                              ? 'opacity-50 cursor-not-allowed bg-muted/20'
+                              : isSelected 
+                                ? 'bg-primary text-primary-foreground shadow-sm cursor-pointer' 
+                                : 'hover:bg-muted/50 border border-transparent hover:border-border cursor-pointer'
                           }`}
-                          onClick={() => setSelectedTime(time)}
+                          onClick={() => {
+                            if (!isPast) {
+                              handleTimeChange(time);
+                            }
+                          }}
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-medium">{formatTimeForDisplay(time)}</span>
-                            {isSelected && (
+                            {isSelected && !isPast && (
                               <div className="text-xs bg-primary-foreground/20 px-2 py-1 rounded">
                                 Selected
+                              </div>
+                            )}
+                            {isPast && (
+                              <div className="text-xs text-muted-foreground">
+                                Past
                               </div>
                             )}
                           </div>
