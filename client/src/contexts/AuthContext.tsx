@@ -22,6 +22,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then(response => {
           if (response.success) {
             setUser(response.data.user);
+            if(response.data.user && response.data.user.status!=="active"){
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('token')
+            }
           } else {
             // Invalid response format, clear tokens
             localStorage.removeItem('token');
