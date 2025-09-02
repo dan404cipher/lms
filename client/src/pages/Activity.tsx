@@ -131,7 +131,7 @@ const Activity = () => {
 
   useEffect(() => {
     fetchActivities();
-  }, []);
+  }, [currentPage]);
 
   const fetchActivities = async () => {
     try {
@@ -443,6 +443,7 @@ const Activity = () => {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
+                  max={endDate ||undefined}
                 />
               </div>
               <div>
@@ -451,6 +452,7 @@ const Activity = () => {
                   id="endDate"
                   type="date"
                   value={endDate}
+                  min={startDate||undefined}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
               </div>
