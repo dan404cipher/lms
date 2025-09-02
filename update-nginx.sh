@@ -32,7 +32,7 @@ fi
 
 # Restart the HireAccel Nginx container to load new config
 echo "🔄 Restarting HireAccel Nginx container..."
-docker-compose -f docker-compose.prod.yml restart hire-accel-nginx-prod
+docker-compose -f docker-compose.prod.yml restart nginx
 
 # Wait for container to be ready
 echo "⏳ Waiting for Nginx to restart..."
@@ -75,4 +75,4 @@ echo ""
 echo "📋 If there are issues:"
 echo "   - Check logs: docker logs hire-accel-nginx-prod"
 echo "   - Restore backup: cp nginx-production.conf.backup.* nginx-production.conf"
-echo "   - Restart container: docker-compose -f docker-compose.prod.yml restart hire-accel-nginx-prod"
+echo "   - Restart container: docker-compose -f docker-compose.prod.yml restart nginx"
