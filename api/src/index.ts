@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
 // Load environment variables FIRST before any other imports
 const envPath = path.join(__dirname, '..', '.env');
@@ -198,10 +199,18 @@ app.use('/recordings', (req, res, next) => {
   
   // Handle OPTIONS preflight
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);``
+    res.sendStatus(200);
     return;
   }
   
+  next();
+}, (req, res, next) => {
+  // Check if recordings directory exists, create if not
+  const recordingsDir = path.join(__dirname, '../recordings');
+  if (!fs.existsSync(recordingsDir)) {
+    fs.mkdirSync(recordingsDir, { recursive: true });
+    console.log('Created recordings directory:', recordingsDir);
+  }
   next();
 }, express.static(path.join(__dirname, '../recordings')));
 

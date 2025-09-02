@@ -313,6 +313,7 @@ class ZoomIntegration {
       const recordingsDir = path.join(process.cwd(), 'recordings');
       if (!fs.existsSync(recordingsDir)) {
         fs.mkdirSync(recordingsDir, { recursive: true });
+        console.log('Created recordings directory:', recordingsDir);
       }
 
       // Generate unique filename

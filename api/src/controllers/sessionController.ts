@@ -6,6 +6,7 @@ import { Course } from '../models/Course';
 import { Enrollment } from '../models/Enrollment';
 import zoomIntegration from '../utils/zoomIntegration';
 import ActivityLogger from '../utils/activityLogger';
+import { RecordingUtils } from '../utils/recordingUtils';
 import fs from 'fs';
 import path from 'path';
 
@@ -747,9 +748,15 @@ export const getRecordings = async (req: AuthRequest, res: Response, next: NextF
     const transformedRecordings = recordings.map(recording => {
       const recordingObj = recording.toObject();
       
-      // If we have a local file, use local URL, otherwise use Zoom URL
+      // If we have a local file, check if it exists and use local URL
       if (recordingObj.localFilePath) {
-        recordingObj.recordingUrl = `${req.protocol}://${req.get('host')}${recordingObj.localFilePath}`;
+        const fileName = path.basename(recordingObj.localFilePath);
+        
+        if (RecordingUtils.recordingExists(fileName)) {
+          recordingObj.recordingUrl = `${req.protocol}://${req.get('host')}/recordings/${fileName}`;
+        } else {
+          console.log(`Local recording file not found: ${fileName}, using Zoom URL`);
+        }
       }
       
       return recordingObj;
@@ -803,9 +810,15 @@ export const downloadRecording = async (req: AuthRequest, res: Response, next: N
 
     // If we have a local file, serve it directly
     if (recording.localFilePath) {
-      const filePath = path.join(process.cwd(), recording.localFilePath.replace('/', ''));
+      // Extract filename from the local file path
+      const fileName = path.basename(recording.localFilePath);
       
-      if (fs.existsSync(filePath)) {
+      console.log('Attempting to serve local recording:', fileName);
+      console.log('File exists:', RecordingUtils.recordingExists(fileName));
+      
+      if (RecordingUtils.recordingExists(fileName)) {
+        const filePath = RecordingUtils.getRecordingPath(fileName);
+        
         // Increment view count
         await Recording.findByIdAndUpdate(recording._id, { $inc: { viewCount: 1 } });
         
@@ -817,6 +830,8 @@ export const downloadRecording = async (req: AuthRequest, res: Response, next: N
         const fileStream = fs.createReadStream(filePath);
         fileStream.pipe(res);
         return;
+      } else {
+        console.log('Local recording file not found, falling back to Zoom URL');
       }
     }
 
@@ -833,7 +848,7 @@ export const downloadRecording = async (req: AuthRequest, res: Response, next: N
     } else {
       res.status(404).json({
         success: false,
-        message: 'Recording file not available'
+        message: 'Recording file not available. The recording may still be processing or the file may have been moved.'
       });
     }
   } catch (error) {

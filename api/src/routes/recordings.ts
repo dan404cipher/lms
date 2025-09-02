@@ -7,10 +7,60 @@ import { Session } from '../models/Session';
 
 const router = express.Router();
 
+// @desc    Test authorization for recording uploads
+// @route   GET /api/recordings/test-auth/:sessionId
+// @access  Private (Instructor, Admin)
+router.get('/test-auth/:sessionId', 
+  protect, 
+  authorize('instructor', 'admin', 'super_admin'),
+  async (req: any, res: any, next: any) => {
+    try {
+      const { sessionId } = req.params;
+
+      // Check if session exists
+      const session = await Session.findById(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: 'Session not found'
+        });
+      }
+
+      // Check authorization
+      const isAuthorized = session.instructorId.toString() === req.user._id.toString() || 
+                          ['admin', 'super_admin'].includes(req.user.role);
+
+      res.json({
+        success: true,
+        message: 'Authorization test completed',
+        data: {
+          sessionId: sessionId,
+          sessionInstructorId: session.instructorId.toString(),
+          userId: req.user._id.toString(),
+          userRole: req.user.role,
+          isAuthorized: isAuthorized,
+          isInstructor: session.instructorId.toString() === req.user._id.toString(),
+          isAdmin: ['admin', 'super_admin'].includes(req.user.role)
+        }
+      });
+
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Configure multer for video file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../recordings'));
+    const recordingsDir = path.join(__dirname, '../../recordings');
+    // Ensure directory exists
+    const fs = require('fs');
+    if (!fs.existsSync(recordingsDir)) {
+      fs.mkdirSync(recordingsDir, { recursive: true });
+      console.log('Created recordings directory for upload:', recordingsDir);
+    }
+    cb(null, recordingsDir);
   },
   filename: (req, file, cb) => {
     const sessionId = req.params.sessionId;
@@ -41,6 +91,14 @@ const upload = multer({
 router.post('/upload/:sessionId', 
   protect, 
   authorize('instructor', 'admin', 'super_admin'),
+  (req: any, res: any, next: any) => {
+    console.log('Recording upload middleware - User info:', {
+      userId: req.user?._id,
+      userRole: req.user?.role,
+      sessionId: req.params.sessionId
+    });
+    next();
+  },
   upload.single('recording'),
   (error: any, req: any, res: any, next: any) => {
     if (error) {
@@ -71,12 +129,32 @@ router.post('/upload/:sessionId',
         });
       }
 
-      // Check authorization
-      if (session.instructorId.toString() !== req.user._id.toString() && 
-          !['admin', 'super_admin'].includes(req.user.role)) {
+      // Check authorization with detailed logging
+      const isSessionInstructor = session.instructorId.toString() === req.user._id.toString();
+      const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+      const isAuthorized = isSessionInstructor || isAdmin;
+
+      console.log('Authorization check for recording upload:', {
+        sessionId: sessionId,
+        sessionInstructorId: session.instructorId.toString(),
+        userId: req.user._id.toString(),
+        userRole: req.user.role,
+        isInstructor: isSessionInstructor,
+        isAdmin: isAdmin,
+        isAuthorized: isAuthorized
+      });
+
+      if (!isAuthorized) {
         return res.status(403).json({
           success: false,
-          message: 'Not authorized to upload recordings for this session'
+          message: 'Not authorized to upload recordings for this session',
+          debug: {
+            sessionInstructorId: session.instructorId.toString(),
+            userId: req.user._id.toString(),
+            userRole: req.user.role,
+            isInstructor: isSessionInstructor,
+            isAdmin: isAdmin
+          }
         });
       }
 

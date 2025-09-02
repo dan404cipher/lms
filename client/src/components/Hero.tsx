@@ -35,7 +35,7 @@ const Hero = () => {
                 Explore Courses
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
-              <Button size="lg" variant="outline" className="border-white/20 text-primary-foreground hover:bg-white/10">
+              <Button size="lg" variant="outline" className="border-white/20 text-blue-500 hover:bg-white/10">
                 <Play className="h-5 w-5 mr-2" />
                 Watch Demo
               </Button>
