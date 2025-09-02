@@ -439,7 +439,7 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
                             )}
                             
                             {session.hasRecording && (
-                              <Button
+                              <Button   
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleWatchRecording(session._id)}

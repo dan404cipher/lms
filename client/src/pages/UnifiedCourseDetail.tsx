@@ -71,6 +71,7 @@ interface CourseRecording {
   duration: number;
   viewed: boolean;
   url?: string;
+  sessionId?: string;
 }
 
 interface CourseGroup {
@@ -123,6 +124,7 @@ interface Session {
   duration: number;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   hasRecording?: boolean;
+  sessionId?: string;
 }
 
 interface Material {
@@ -897,8 +899,8 @@ const UnifiedCourseDetail = () => {
   };
 
   const handleViewRecording = (recording: CourseRecording) => {
-    console.log('Viewing recording:', recording);
-    setSelectedRecording(recording);
+    const record = course?.recordings?.find(r => r.sessionId === recording._id);
+    setSelectedRecording(record as any);
     setShowVideoPlayer(true);
   };
 
