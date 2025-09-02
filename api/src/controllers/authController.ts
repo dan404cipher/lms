@@ -247,7 +247,7 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
       console.log('user',user)
 
       res.json({
-        success: true,
+        success: false,
         message: 'No account found with this email'
       });
       return;

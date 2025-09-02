@@ -24,13 +24,24 @@ const ForgotPassword = () => {
     setIsLoading(true);
 
     try {
-      await authService.forgotPassword(email);
-      setIsSubmitted(true);
+     const response= await authService.forgotPassword(email);
+     console.log('response',response)
+     if(response.success){
       toast({
         title: "Reset email sent!",
         description: "Please check your email for password reset instructions.",
       });
+     }
+     else{
+      toast({
+        title: "Fail to Reset email sent!",
+        description: response.message ||"Failed to send reset email. Please try again." , 
+      });
+     }
+      setIsSubmitted(true);
+   
     } catch (err: any) {
+      console.log('err',err)
       setError(err.response?.data?.message || "Failed to send reset email. Please try again.");
       toast({
         title: "Error",
