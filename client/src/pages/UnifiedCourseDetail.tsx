@@ -35,6 +35,7 @@ import {
   Search,
   Users,
   ChevronLeft,
+  Trash,
 } from "lucide-react";
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
@@ -895,6 +896,10 @@ const UnifiedCourseDetail = () => {
   };
 
 
+  const handleDeleteLesson = (lessonId: string) => {
+    console.log('Deleting lesson:', lessonId);
+  };
+
 
   if (authLoading) {
     return (
@@ -1248,6 +1253,9 @@ const UnifiedCourseDetail = () => {
                                   <Button variant="ghost" size="sm">
                                     <Edit className="h-4 w-4" />
                                   </Button>
+                                  {isAdmin &&(<div className="bg-red-400 text-white p-1 rounded-lg cursor-pointer" onClick={() => handleDeleteLesson(lesson._id)}>
+                                    <Trash className="h-4 w-4" />
+                                  </div>)}
                                 </div>
                               )}
                             </div>
