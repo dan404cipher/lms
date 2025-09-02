@@ -7,6 +7,12 @@ set -e
 
 echo "🚀 Starting LMS Production Deployment..."
 
+# Check if we're in the right directory
+if [ ! -f "docker-compose.prod.yml" ]; then
+    echo "❌ docker-compose.prod.yml not found. Please run this script from the LMS directory."
+    exit 1
+fi
+
 # Check if Docker and Docker Compose are installed
 if ! command -v docker &> /dev/null; then
     echo "❌ Docker is not installed. Please install Docker first."
@@ -18,23 +24,14 @@ if ! command -v docker-compose &> /dev/null; then
     exit 1
 fi
 
-# Create necessary directories
-echo "📁 Creating necessary directories..."
-sudo mkdir -p /opt/lms
-sudo mkdir -p /opt/lms/ssl
+# Check if SSL certificates exist
+if [ ! -f "ssl/cert.pem" ] || [ ! -f "ssl/key.pem" ]; then
+    echo "⚠️ SSL certificates not found in ssl/ directory"
+    echo "Please run ./setup-ssl.sh first to generate SSL certificates"
+    exit 1
+fi
 
-# Set proper permissions
-sudo chown -R $USER:$USER /opt/lms
-
-# Copy files to deployment directory
-echo "📋 Copying configuration files..."
-cp docker-compose.prod.yml /opt/lms/
-cp nginx-lms-production.conf /opt/lms/
-cp -r api /opt/lms/
-cp -r client /opt/lms/
-
-# Navigate to deployment directory
-cd /opt/lms
+echo "✅ SSL certificates found"
 
 # Stop any existing containers
 echo "🛑 Stopping existing containers..."
@@ -52,6 +49,14 @@ sleep 30
 echo "🔍 Checking service health..."
 docker-compose -f docker-compose.prod.yml ps
 
+# Test health endpoints
+echo "🏥 Testing health endpoints..."
+if curl -f http://localhost:8080/health > /dev/null 2>&1; then
+    echo "✅ LMS health check passed"
+else
+    echo "⚠️ LMS health check failed - check logs"
+fi
+
 # Show logs
 echo "📋 Showing recent logs..."
 docker-compose -f docker-compose.prod.yml logs --tail=50
@@ -59,11 +64,10 @@ docker-compose -f docker-compose.prod.yml logs --tail=50
 echo "✅ LMS deployment completed!"
 echo ""
 echo "🌐 Your LMS application should be available at:"
-echo "   - HTTP: http://your-server-ip:8080"
-echo "   - HTTPS: https://axessupskill.v-accel.ai (after SSL setup)"
+echo "   - Internal: http://localhost:8080"
+echo "   - External: https://axessupskill.v-accel.ai (after Nginx configuration)"
 echo ""
 echo "📝 Next steps:"
-echo "   1. Configure SSL certificates in /opt/lms/ssl/"
-echo "   2. Update your domain DNS to point to this server"
-echo "   3. Configure your main Nginx to proxy to this LMS instance"
-echo "   4. Test the application functionality"
+echo "   1. Update your main Nginx configuration using nginx-main-server.conf"
+echo "   2. Test both HireAccel and LMS applications"
+echo "   3. Monitor logs for any issues"
