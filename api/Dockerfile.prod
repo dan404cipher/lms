@@ -42,8 +42,9 @@ COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
 # Create uploads and recordings directories with proper permissions
 RUN mkdir -p uploads recordings && chown -R nodejs:nodejs uploads recordings
 
-# Copy .env.production file
-COPY --chown=nodejs:nodejs .env.production ./.env
+# Copy .env.production file (create from example if not exists)
+COPY --chown=nodejs:nodejs .env.production* ./
+RUN if [ ! -f .env.production ]; then cp .env.production.example .env.production; fi && mv .env.production .env
 
 # Switch to non-root user
 USER nodejs

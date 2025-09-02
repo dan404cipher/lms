@@ -14,6 +14,9 @@ cd /opt
 rm -rf lms  # Remove any existing directory
 git clone https://github.com/dan404cipher/lms.git
 cd lms
+
+# Setup environment files
+./setup-env.sh
 ```
 
 ### Step 2: Generate SSL Certificates
