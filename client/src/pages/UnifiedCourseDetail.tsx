@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -231,6 +232,7 @@ const UnifiedCourseDetail = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null);
 
   // Course settings state
   const [courseSettings, setCourseSettings] = useState({
@@ -897,7 +899,63 @@ const UnifiedCourseDetail = () => {
 
 
   const handleDeleteLesson = (lessonId: string) => {
-    console.log('Deleting lesson:', lessonId);
+    setDeleteLessonId(lessonId);
+  };
+
+  const confirmDeleteLesson = async () => {
+    if (!courseId || !deleteLessonId) {
+      toast({
+        title: "Error",
+        description: "Course ID or Lesson ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Find the module that contains this lesson
+    const module = course?.modules?.find(m => 
+      m.lessons.some(l => l._id === deleteLessonId)
+    );
+
+    if (!module) {
+      toast({
+        title: "Error",
+        description: "Module not found for this lesson",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await instructorService.deleteLesson(courseId, module._id, deleteLessonId);
+      
+      // Update the local state to remove the lesson
+      setCourse(prevCourse => {
+        if (!prevCourse) return null;
+        return {
+          ...prevCourse,
+          modules: prevCourse.modules?.map(m => 
+            m._id === module._id 
+              ? { ...m, lessons: m.lessons.filter(l => l._id !== deleteLessonId) }
+              : m
+          )
+        };
+      });
+
+      toast({
+        title: "Success",
+        description: "Lesson deleted successfully",
+      });
+    } catch (error: any) {
+      console.error('Error deleting lesson:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete lesson",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteLessonId(null);
+    }
   };
 
 
@@ -1253,9 +1311,15 @@ const UnifiedCourseDetail = () => {
                                   <Button variant="ghost" size="sm">
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  {isAdmin &&(<div className="bg-red-400 text-white p-1 rounded-lg cursor-pointer" onClick={() => handleDeleteLesson(lesson._id)}>
-                                    <Trash className="h-4 w-4" />
-                                  </div>)}
+                                  {(isInstructor || isAdmin) && (
+                                    <div 
+                                      className="bg-red-400 text-white p-1 rounded-lg cursor-pointer hover:bg-red-500 transition-colors" 
+                                      onClick={() => handleDeleteLesson(lesson._id)}
+                                      title="Delete lesson"
+                                    >
+                                      <Trash className="h-4 w-4" />
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -2464,6 +2528,23 @@ const UnifiedCourseDetail = () => {
         }}
       />
 
+      {/* Delete Lesson Confirmation Dialog */}
+      <AlertDialog open={!!deleteLessonId} onOpenChange={(open) => !open && setDeleteLessonId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Lesson</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this lesson? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteLesson} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

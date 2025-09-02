@@ -12,11 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 import activityService from "@/services/activityService";
-import { 
-  Video, 
-  FileText, 
-  MessageSquare, 
-  Building, 
+import {
+  Video,
+  FileText,
+  MessageSquare,
+  Building,
   Calendar,
   Clock,
   Play,
@@ -125,9 +125,13 @@ const Activity = () => {
   }, [searchTerm]);
 
   // Main fetch effect for filters and pagination
+  // useEffect(() => {
+  //   fetchActivities();
+  // }, [currentPage, selectedType, selectedCourse, startDate, endDate]);
+
   useEffect(() => {
     fetchActivities();
-  }, [currentPage, selectedType, selectedCourse, startDate, endDate]);
+  }, []);
 
   const fetchActivities = async () => {
     try {
@@ -203,7 +207,7 @@ const Activity = () => {
     setStartDate("");
     setEndDate("");
     setCurrentPage(1);
-    setIsFiltering(true);
+    // setIsFiltering(true);
     // Fetch activities will be triggered by useEffect
   };
 
@@ -250,10 +254,10 @@ const Activity = () => {
 
   const convertToCSV = (data: any[]) => {
     if (data.length === 0) return '';
-    
+
     const headers = Object.keys(data[0]);
     const csvRows = [headers.join(',')];
-    
+
     for (const row of data) {
       const values = headers.map(header => {
         const value = row[header];
@@ -261,7 +265,7 @@ const Activity = () => {
       });
       csvRows.push(values.join(','));
     }
-    
+
     return csvRows.join('\n');
   };
 
@@ -389,8 +393,8 @@ const Activity = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4  items-center justify-end">
+              {/*  <div>
                 <Label htmlFor="search">Search</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -402,7 +406,7 @@ const Activity = () => {
                     className="pl-10"
                   />
                 </div>
-              </div>
+              </div> */}
               <div>
                 <Label htmlFor="type">Activity Type</Label>
                 <Select value={selectedType} onValueChange={setSelectedType}>
@@ -452,16 +456,16 @@ const Activity = () => {
               </div>
             </div>
             <div className="flex items-center space-x-2 mt-4">
-              <Button 
-                onClick={handleApplyFilters} 
-                size="sm" 
+              <Button
+                onClick={handleApplyFilters}
+                size="sm"
                 disabled={isFiltering}
               >
                 {isFiltering ? 'Applying...' : 'Apply Filters'}
               </Button>
-              <Button 
-                onClick={handleClearFilters} 
-                variant="outline" 
+              <Button
+                onClick={handleClearFilters}
+                variant="outline"
                 size="sm"
                 disabled={isFiltering}
               >
@@ -482,7 +486,7 @@ const Activity = () => {
                       <div className="flex-shrink-0 mt-1">
                         {getActivityIcon(activity.type)}
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2 mb-1">
                           <Badge variant="outline" className="text-xs">
@@ -497,15 +501,15 @@ const Activity = () => {
                             </Badge>
                           )}
                         </div>
-                        
+
                         <h3 className="font-semibold text-foreground mb-2">
                           {activity.title}
                         </h3>
-                        
+
                         <p className="text-sm text-muted-foreground mb-2">
                           {activity.description}
                         </p>
-                        
+
                         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                           <span>{activity.formattedDate}</span>
                           <span>{activity.formattedTime}</span>
@@ -545,12 +549,12 @@ const Activity = () => {
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious 
+                  <PaginationPrevious
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                   />
                 </PaginationItem>
-                
+
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   const page = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
                   return (
@@ -565,9 +569,9 @@ const Activity = () => {
                     </PaginationItem>
                   );
                 })}
-                
+
                 <PaginationItem>
-                  <PaginationNext 
+                  <PaginationNext
                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                   />

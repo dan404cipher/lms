@@ -653,11 +653,21 @@ export const createLesson = async (req: AuthRequest, res: Response, next: NextFu
     const { courseId, moduleId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    // Check if course exists
+    const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course not found'
+      });
+    }
+
+    // Check authorization - allow instructor if they own the course, or admin/super_admin
+    if (course.instructorId.toString() !== userId.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to create lessons in this course'
       });
     }
 
@@ -954,11 +964,21 @@ export const updateModule = async (req: AuthRequest, res: Response, next: NextFu
     const { courseId, moduleId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    // Check if course exists
+    const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course not found'
+      });
+    }
+
+    // Check authorization - allow instructor if they own the course, or admin/super_admin
+    if (course.instructorId.toString() !== userId.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this module'
       });
     }
 
@@ -989,11 +1009,21 @@ export const deleteModule = async (req: AuthRequest, res: Response, next: NextFu
     const { courseId, moduleId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    // Check if course exists
+    const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course not found'
+      });
+    }
+
+    // Check authorization - allow instructor if they own the course, or admin/super_admin
+    if (course.instructorId.toString() !== userId.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this module'
       });
     }
 
@@ -1022,11 +1052,21 @@ export const updateLesson = async (req: AuthRequest, res: Response, next: NextFu
     const { courseId, moduleId, lessonId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    // Check if course exists
+    const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course not found'
+      });
+    }
+
+    // Check authorization - allow instructor if they own the course, or admin/super_admin
+    if (course.instructorId.toString() !== userId.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this lesson'
       });
     }
 
@@ -1057,11 +1097,21 @@ export const deleteLesson = async (req: AuthRequest, res: Response, next: NextFu
     const { courseId, moduleId, lessonId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    // Check if course exists
+    const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course not found'
+      });
+    }
+
+    // Check authorization - allow instructor if they own the course, or admin/super_admin
+    if (course.instructorId.toString() !== userId.toString() && 
+        !['admin', 'super_admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this lesson'
       });
     }
 
