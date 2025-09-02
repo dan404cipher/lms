@@ -6,6 +6,7 @@ import { Course } from '../models/Course';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { uploadFileLocally, deleteFileLocally } from '../utils/fileUpload';
+import { Material, Recording, Session } from '../models';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -850,6 +851,9 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
 
     // Get course modules and lessons for progress calculation
     const modules = await Module.find({ courseId }).sort({ order: 1 });
+    const sessions = await Session.find({ courseId }).sort({ scheduledAt: 1 });
+    const materials = await Material.find({ courseId }).sort({ createdAt: -1 });
+    const recordings=await Recording.find({ courseId }).sort({ createdAt: -1 });
     const lessons = await Lesson.find({ 
       moduleId: { $in: modules.map(m => m._id) } 
     }).sort({ order: 1 });
@@ -907,15 +911,15 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       }
     ];
 
-    const recordings = [
-      {
-        _id: 'recording-1',
-        title: 'Introduction to AI Concepts',
-        date: '2025-08-10',
-        duration: '45:30',
-        instructor: (course.instructorId as any)?.name || 'Instructor'
-      }
-    ];
+    // const recordings = [
+    //   {
+    //     _id: 'recording-1',
+    //     title: 'Introduction to AI Concepts',
+    //     date: '2025-08-10',
+    //     duration: '45:30',
+    //     instructor: (course.instructorId as any)?.name || 'Instructor'
+    //   }
+    // ];
 
     const groups = [
       {
@@ -962,9 +966,11 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       syllabus,
       prerequisites,
       assessments,
-      recordings,
       groups,
       notes,
+      sessions,
+      materials,
+      recordings,
       modules: modules.map(module => ({
         _id: module._id,
         title: module.title,

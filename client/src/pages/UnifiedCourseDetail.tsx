@@ -122,6 +122,7 @@ interface Session {
   scheduledAt: string;
   duration: number;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  hasRecording?: boolean;
 }
 
 interface Material {
@@ -259,6 +260,8 @@ const UnifiedCourseDetail = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState<any>(null);
 
   const isInstructor = user?.role === 'instructor';
   const isAdmin = user?.role === 'admin';
@@ -895,6 +898,8 @@ const UnifiedCourseDetail = () => {
 
   const handleViewRecording = (recording: CourseRecording) => {
     console.log('Viewing recording:', recording);
+    setSelectedRecording(recording);
+    setShowVideoPlayer(true);
   };
 
 
@@ -1448,7 +1453,20 @@ const UnifiedCourseDetail = () => {
                             <Badge variant="outline" className="capitalize">
                               {session.type.replace('-', ' ')}
                             </Badge>
+                            <div>
+                              {session?.hasRecording && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleViewRecording(session as any)}
+                                >
+                                  <Play className="h-4 w-4 mr-2" />
+                                  Watch Recording
+                                </Button>
+                              )}
+                            </div>
                           </div>
+                          
                         </div>
                       ))}
                     </div>
@@ -1473,6 +1491,66 @@ const UnifiedCourseDetail = () => {
             </>
           )}
         </TabsContent>
+
+        {selectedRecording && (
+                <Dialog open={showVideoPlayer} onOpenChange={setShowVideoPlayer}>
+                <DialogContent className="max-w-4xl w-full">
+                  <DialogHeader>
+                    <DialogTitle>{selectedRecording?.title}</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    {selectedRecording && (
+                      <div className="relative">
+                        <video
+                          controls
+                          className="w-full h-auto max-h-[70vh] rounded-lg shadow-sm"
+                          preload="metadata"
+                          autoPlay
+                          onError={(e) => {
+                            console.error('Video error:', e);
+                            toast({
+                              title: "Video Error",
+                              description: "Could not load the recording. Please try downloading it instead.",
+                              variant: "destructive"
+                            });
+                          }}
+                        >
+                          <source src={selectedRecording.recordingUrl} type="video/mp4" />
+                          Your browser does not support the video tag.
+                        </video>
+                        
+                        {/* Recording Info */}
+                        <div className="mt-4 p-3 bg-muted/20 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">{selectedRecording.title}</p>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span>Duration: {Math.floor(selectedRecording.duration / 60)}:{(selectedRecording.duration % 60).toString().padStart(2, '0')}</span>
+                                <span>Views: {selectedRecording.viewCount}</span>
+                                <span>Recorded: {new Date(selectedRecording.recordedAt).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = selectedRecording.recordingUrl;
+                                link.download = `${selectedRecording.title}.mp4`;
+                                link.click();
+                              }}
+                            >
+                              <Download className="h-4 w-4 mr-2" />
+                              Download
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+        )}
 
 
 

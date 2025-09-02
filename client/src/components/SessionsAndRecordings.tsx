@@ -377,7 +377,6 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
                           )}
                         </div>
 
-
                       </div>
 
                       <div className="flex items-center gap-2 ml-4">
