@@ -8,11 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { BookOpen, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(localStorage.getItem('remember') === "true" ||false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   
@@ -21,6 +23,13 @@ const Login = () => {
   const { toast } = useToast();
 
   // Redirect based on user role after successful login
+  useEffect(() => {
+    if(localStorage.getItem('remember') === "true"){
+      setEmail(localStorage.getItem('email') || "");
+      setPassword(localStorage.getItem('password') || "");
+    }
+  }, []);
+
   useEffect(() => {
     if (user) {
       if (user.role === 'instructor') {
@@ -42,6 +51,16 @@ const Login = () => {
 
     try {
       await login(email, password);
+      if(remember){
+        localStorage.setItem('remember', "true");
+        localStorage.setItem('email', email);
+        localStorage.setItem('password', password);
+      }
+      else{
+        localStorage.removeItem('remember');
+        localStorage.removeItem('email');
+        localStorage.removeItem('password');
+      }
       toast({
         title: "Welcome back!",
         description: "You have successfully logged in.",
@@ -157,14 +176,19 @@ const Login = () => {
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={isLoading}
                   >
-                    {showPassword ? (
+                    {!showPassword ? (
                       <EyeOff className="h-4 w-4" />
                     ) : (
                       <Eye className="h-4 w-4" />
                     )}
                   </button>
                 </div>
+                <div className="flex items-center space-x-2 rounded-md p-2">
+                <Checkbox checked={remember} onClick={() => setRemember(!remember)} />
+                <span className="text-sm">Remember me</span>
               </div>
+              </div>
+             
 
               <Button
                 type="button"
