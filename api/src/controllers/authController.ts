@@ -504,3 +504,65 @@ export const updateProfile = async (req: AuthRequest, res: Response, next: NextF
     next(error);
   }
 };
+
+// @desc    Change password
+// @route   POST /api/auth/change-password
+// @access  Private
+export const changePassword = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.status(400).json({ 
+        success: false, 
+        errors: errors.array() 
+      });
+      return;
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Get user with password field
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+      return;
+    }
+
+    // Check if current password is correct
+    const isCurrentPasswordCorrect = await user.comparePassword(currentPassword);
+    if (!isCurrentPasswordCorrect) {
+      res.status(400).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+      return;
+    }
+
+    // Check if new password is the same as current password
+    const isSamePassword = await user.comparePassword(newPassword);
+    if (isSamePassword) {
+      res.status(400).json({
+        success: false,
+        message: 'New password cannot be the same as your current password'
+      });
+      return;
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Log password change activity
+    await ActivityLogger.logPasswordChange((user as any)._id.toString(), req);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

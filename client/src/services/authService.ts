@@ -128,6 +128,11 @@ class AuthService {
     const response = await authAxios.post(`/auth/reset-password/${token}`, { password });
     return response.data;
   }
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<any> {
+    const response = await authAxios.post('/auth/change-password', data);
+    return response.data;
+  }
 }
 
 export default new AuthService();

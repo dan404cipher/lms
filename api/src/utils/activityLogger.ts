@@ -216,6 +216,19 @@ export class ActivityLogger {
   }
 
   /**
+   * Log password change
+   */
+  static async logPasswordChange(userId: string, req: Request): Promise<void> {
+    await this.log({
+      userId,
+      type: 'password_change',
+      title: 'Password changed',
+      description: 'User changed their password',
+      req
+    });
+  }
+
+  /**
    * Log course view
    */
   static async logCourseView(userId: string, courseId: string, courseTitle: string, req: Request): Promise<void> {

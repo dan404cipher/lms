@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IActivity extends Document {
   userId: mongoose.Types.ObjectId;
-  type: 'login' | 'logout' | 'course_enrollment' | 'course_completion' | 'session_join' | 'session_leave' | 'assignment_submit' | 'quiz_attempt' | 'quiz_completion' | 'material_download' | 'profile_update' | 'password_reset' | 'course_view' | 'lesson_view' | 'discussion_post' | 'discussion_reply' | 'certificate_earned' | 'payment_made' | 'admin_action' | 'instructor_action';
+  type: 'login' | 'logout' | 'course_enrollment' | 'course_completion' | 'session_join' | 'session_leave' | 'assignment_submit' | 'quiz_attempt' | 'quiz_completion' | 'material_download' | 'profile_update' | 'password_reset' | 'password_change' | 'course_view' | 'lesson_view' | 'discussion_post' | 'discussion_reply' | 'certificate_earned' | 'payment_made' | 'admin_action' | 'instructor_action';
   title: string;
   description: string;
   metadata: {
@@ -40,7 +40,7 @@ const activitySchema = new Schema<IActivity>({
       'login', 'logout', 'course_enrollment', 'course_completion', 
       'session_join', 'session_leave', 'assignment_submit', 'quiz_attempt', 
       'quiz_completion', 'material_download', 'profile_update', 'password_reset',
-      'course_view', 'lesson_view', 'discussion_post', 'discussion_reply',
+      'password_change', 'course_view', 'lesson_view', 'discussion_post', 'discussion_reply',
       'certificate_earned', 'payment_made', 'admin_action', 'instructor_action'
     ],
     required: true,
