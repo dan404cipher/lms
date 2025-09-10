@@ -1303,6 +1303,7 @@ const UnifiedCourseDetail = () => {
                                     size="sm"
                                     onClick={() => {
                                       setSelectedLessonId(lesson._id);
+                                      setSelectedModuleId(module._id);
                                       setShowFileUpload(true);
                                     }}
                                   >
@@ -1338,6 +1339,7 @@ const UnifiedCourseDetail = () => {
                                 variant="outline"
                                 onClick={() => {
                                   setSelectedModuleId(module._id);
+                                  setSelectedLessonId(null); // Clear lesson ID when adding to module
                                   setShowFileUpload(true);
                                 }}
                                 className="w-full"
@@ -2329,16 +2331,16 @@ const UnifiedCourseDetail = () => {
                     type="file"
                     accept="*/*"
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setSelectedFiles([file]);
-                        console.log('Material file selected:', file);
+                      const files = e.target.files;
+                      if (files && files.length > 0) {
+                        setSelectedFiles(files);
+                        console.log('Material file selected:', files[0]);
                       }
                     }}
                     className="cursor-pointer"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Select a file to upload. All file types are accepted.
+                      Select a file to upload. image,video,documents and SCROM packages file types are accepted.
                   </p>
                 </div>
               </div>
@@ -2459,7 +2461,7 @@ const UnifiedCourseDetail = () => {
                   className="cursor-pointer"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Select one or more files to upload. All file types are accepted.
+                  Select one or more files to upload. image, video, documents and SCROM packages file types are accepted.
                 </p>
               </div>
             </div>
@@ -2492,8 +2494,25 @@ const UnifiedCourseDetail = () => {
                 return;
               }
 
+              if (!selectedModuleId) {
+                toast({
+                  title: "Error",
+                  description: "Module ID is missing. Please try again.",
+                  variant: "destructive",
+                });
+                return;
+              }
+
               try {
                 setIsSubmitting(true);
+
+                console.log('File upload debug info:', {
+                  courseId,
+                  selectedModuleId,
+                  selectedLessonId,
+                  isAdmin,
+                  isInstructor
+                });
 
                 if (!selectedLessonId) {
                   // Create new lesson first
@@ -2512,6 +2531,13 @@ const UnifiedCourseDetail = () => {
                     const formData = new FormData();
                     formData.append('content', file);
 
+                    console.log('Uploading to new lesson:', {
+                      courseId,
+                      moduleId: selectedModuleId,
+                      lessonId: newLessonId,
+                      fileName: file.name
+                    });
+
                     await service.uploadLessonContent(courseId!, selectedModuleId!, newLessonId, formData);
                   }
 
@@ -2526,6 +2552,13 @@ const UnifiedCourseDetail = () => {
                     const file = selectedFiles[i];
                     const formData = new FormData();
                     formData.append('content', file);
+
+                    console.log('Uploading to existing lesson:', {
+                      courseId,
+                      moduleId: selectedModuleId,
+                      lessonId: selectedLessonId,
+                      fileName: file.name
+                    });
 
                     await service.uploadLessonContent(courseId!, selectedModuleId!, selectedLessonId, formData);
                   }
