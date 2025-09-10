@@ -68,6 +68,131 @@ const Courses = () => {
     thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800' // Default thumbnail
   });
 
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+
+  // Validation functions
+  const validateField = (field: string, value: any): string => {
+    switch (field) {
+      case 'title':
+        if (!value || value.trim().length === 0) {
+          return 'Course title is required';
+        }
+        if (value.trim().length < 3) {
+          return 'Course title must be at least 3 characters long';
+        }
+        if (value.trim().length > 100) {
+          return 'Course title must be less than 100 characters';
+        }
+        return '';
+
+      case 'description':
+        if (!value || value.trim().length === 0) {
+          return 'Course description is required';
+        }
+        if (value.trim().length < 10) {
+          return 'Course description must be at least 10 characters long';
+        }
+        if (value.trim().length > 2000) {
+          return 'Course description must be less than 2000 characters';
+        }
+        return '';
+
+      case 'shortDescription':
+        if (!value || value.trim().length === 0) {
+          return 'Short description is required';
+        }
+        if (value.trim().length < 10) {
+          return 'Short description must be at least 10 characters long';
+        }
+        if (value.trim().length > 200) {
+          return 'Short description must be less than 200 characters';
+        }
+        return '';
+
+      case 'categoryId':
+        if (!value || value.trim().length === 0) {
+          return 'Please select a category';
+        }
+        return '';
+
+      case 'instructorId':
+        if (user?.role === 'admin' && (!value || value.trim().length === 0)) {
+          return 'Please select an instructor';
+        }
+        return '';
+
+      case 'courseCode':
+        if (value && value.trim().length > 0) {
+          if (value.trim().length < 2) {
+            return 'Course code must be at least 2 characters long';
+          }
+          if (value.trim().length > 20) {
+            return 'Course code must be less than 20 characters';
+          }
+          if (!/^[A-Za-z0-9\s-]+$/.test(value.trim())) {
+            return 'Course code can only contain letters, numbers, spaces, and hyphens';
+          }
+        }
+        return '';
+
+      case 'duration':
+        if (!value || value < 1) {
+          return 'Duration must be at least 1 minute';
+        }
+        if (value > 10080) { // 7 days in minutes
+          return 'Duration cannot exceed 7 days (10,080 minutes)';
+        }
+        return '';
+
+      case 'priceCredits':
+        if (value < 0) {
+          return 'Price cannot be negative';
+        }
+        if (value > 10000) {
+          return 'Price cannot exceed 10,000 credits';
+        }
+        return '';
+
+      default:
+        return '';
+    }
+  };
+
+  const validateForm = (): { isValid: boolean; errors: Record<string, string> } => {
+    const errors: Record<string, string> = {};
+    
+    // Validate all required fields
+    const requiredFields = ['title', 'description', 'shortDescription', 'categoryId', 'duration'];
+    if (user?.role === 'admin') {
+      requiredFields.push('instructorId');
+    }
+
+    requiredFields.forEach(field => {
+      const error = validateField(field, formData[field as keyof typeof formData]);
+      if (error) {
+        errors[field] = error;
+      }
+    });
+
+    // Validate optional fields that have values
+    const optionalFields = ['courseCode', 'priceCredits'];
+    optionalFields.forEach(field => {
+      const value = formData[field as keyof typeof formData];
+      if (value !== '' && value !== 0) {
+        const error = validateField(field, value);
+        if (error) {
+          errors[field] = error;
+        }
+      }
+    });
+
+    return {
+      isValid: Object.keys(errors).length === 0,
+      errors
+    };
+  };
+
   const getCourseIcon = (title: string, iconColor?: string) => {
     // Generate a consistent icon based on course title
     const hash = title.split('').reduce((a, b) => {
@@ -233,20 +358,27 @@ const Courses = () => {
   const handleCreateCourse = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.description || !formData.shortDescription || !formData.categoryId || formData.duration < 1) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields and ensure duration is at least 1 minute.",
-        variant: "destructive"
-      });
-      return;
+    // Mark all fields as touched to show validation errors
+    const allFields = ['title', 'description', 'shortDescription', 'categoryId', 'duration', 'courseCode', 'priceCredits'];
+    if (user?.role === 'admin') {
+      allFields.push('instructorId');
     }
+    
+    allFields.forEach(field => {
+      setTouchedFields(prev => new Set(prev).add(field));
+    });
 
-    // For instructors, instructorId is not required as they are creating the course for themselves
-    if (user?.role === 'admin' && !formData.instructorId) {
+    // Validate the entire form
+    const { isValid, errors } = validateForm();
+    setValidationErrors(errors);
+
+    if (!isValid) {
+      const errorCount = Object.keys(errors).length;
+      const errorFields = Object.keys(errors).join(', ');
+      
       toast({
         title: "Validation Error",
-        description: "Please select an instructor.",
+        description: `Please fix ${errorCount} error${errorCount > 1 ? 's' : ''} in the form: ${errorFields}`,
         variant: "destructive"
       });
       return;
@@ -270,22 +402,7 @@ const Courses = () => {
           description: "Course created successfully!"
         });
         setShowCreateModal(false);
-        setFormData({
-          title: '',
-          description: '',
-          shortDescription: '',
-          categoryId: '',
-          instructorId: '',
-          courseCode: '',
-          priceCredits: 0,
-          difficulty: 'beginner',
-          duration: 0,
-          language: 'en',
-          tags: [],
-          requirements: [],
-          learningOutcomes: [],
-          thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800'
-        });
+        resetForm();
         // Refresh courses list
         fetchCourses();
       }
@@ -314,6 +431,54 @@ const Courses = () => {
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    
+    // Mark field as touched
+    setTouchedFields(prev => new Set(prev).add(field));
+    
+    // Validate field in real-time
+    const error = validateField(field, value);
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+  };
+
+  const handleFieldBlur = (field: string) => {
+    setTouchedFields(prev => new Set(prev).add(field));
+    const error = validateField(field, formData[field as keyof typeof formData]);
+    setValidationErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+  };
+
+  const getFieldError = (field: string): string => {
+    return touchedFields.has(field) ? validationErrors[field] || '' : '';
+  };
+
+  const isFieldInvalid = (field: string): boolean => {
+    return touchedFields.has(field) && !!validationErrors[field];
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      shortDescription: '',
+      categoryId: '',
+      instructorId: '',
+      courseCode: '',
+      priceCredits: 0,
+      difficulty: 'beginner',
+      duration: 0,
+      language: 'en',
+      tags: [],
+      requirements: [],
+      learningOutcomes: [],
+      thumbnail: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=800'
+    });
+    setValidationErrors({});
+    setTouchedFields(new Set());
   };
 
   if (loading) {
@@ -427,9 +592,14 @@ const Courses = () => {
                       id="title"
                       value={formData.title}
                       onChange={(e) => handleInputChange('title', e.target.value)}
+                      onBlur={() => handleFieldBlur('title')}
                       placeholder="Enter course title"
+                      className={isFieldInvalid('title') ? 'border-red-500 focus:border-red-500' : ''}
                       required
                     />
+                    {getFieldError('title') && (
+                      <p className="text-sm text-red-600">{getFieldError('title')}</p>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -438,39 +608,64 @@ const Courses = () => {
                       id="courseCode"
                       value={formData.courseCode}
                       onChange={(e) => handleInputChange('courseCode', e.target.value)}
+                      onBlur={() => handleFieldBlur('courseCode')}
                       placeholder="e.g., CS101"
+                      className={isFieldInvalid('courseCode') ? 'border-red-500 focus:border-red-500' : ''}
                     />
+                    {getFieldError('courseCode') && (
+                      <p className="text-sm text-red-600">{getFieldError('courseCode')}</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description *</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="description">Description *</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {formData.description.length}/2000
+                    </span>
+                  </div>
                   <Textarea
                     id="description"
                     value={formData.description}
                     onChange={(e) => handleInputChange('description', e.target.value)}
+                    onBlur={() => handleFieldBlur('description')}
                     placeholder="Enter course description"
                     rows={3}
+                    className={isFieldInvalid('description') ? 'border-red-500 focus:border-red-500' : ''}
                     required
                   />
+                  {getFieldError('description') && (
+                    <p className="text-sm text-red-600">{getFieldError('description')}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="shortDescription">Short Description *</Label>
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="shortDescription">Short Description *</Label>
+                    <span className="text-xs text-muted-foreground">
+                      {formData.shortDescription.length}/200
+                    </span>
+                  </div>
                   <Input
                     id="shortDescription"
                     value={formData.shortDescription}
                     onChange={(e) => handleInputChange('shortDescription', e.target.value)}
+                    onBlur={() => handleFieldBlur('shortDescription')}
                     placeholder="Brief course overview (10-200 characters)"
+                    className={isFieldInvalid('shortDescription') ? 'border-red-500 focus:border-red-500' : ''}
                     required
                   />
+                  {getFieldError('shortDescription') && (
+                    <p className="text-sm text-red-600">{getFieldError('shortDescription')}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="category">Category *</Label>
                     <Select value={formData.categoryId} onValueChange={(value) => handleInputChange('categoryId', value)}>
-                      <SelectTrigger>
+                      <SelectTrigger className={isFieldInvalid('categoryId') ? 'border-red-500 focus:border-red-500' : ''}>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -481,13 +676,16 @@ const Courses = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {getFieldError('categoryId') && (
+                      <p className="text-sm text-red-600">{getFieldError('categoryId')}</p>
+                    )}
                   </div>
                   
                   {user?.role === 'admin' && (
                     <div className="space-y-2">
                       <Label htmlFor="instructor">Instructor *</Label>
                       <Select value={formData.instructorId} onValueChange={(value) => handleInputChange('instructorId', value)}>
-                        <SelectTrigger>
+                        <SelectTrigger className={isFieldInvalid('instructorId') ? 'border-red-500 focus:border-red-500' : ''}>
                           <SelectValue placeholder="Select instructor" />
                         </SelectTrigger>
                         <SelectContent>
@@ -498,6 +696,9 @@ const Courses = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                      {getFieldError('instructorId') && (
+                        <p className="text-sm text-red-600">{getFieldError('instructorId')}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -524,10 +725,15 @@ const Courses = () => {
                       type="number"
                       value={formData.duration}
                       onChange={(e) => handleInputChange('duration', parseInt(e.target.value) || 0)}
+                      onBlur={() => handleFieldBlur('duration')}
                       placeholder="0"
                       min="1"
+                      className={isFieldInvalid('duration') ? 'border-red-500 focus:border-red-500' : ''}
                       required
                     />
+                    {getFieldError('duration') && (
+                      <p className="text-sm text-red-600">{getFieldError('duration')}</p>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
@@ -537,9 +743,14 @@ const Courses = () => {
                       type="number"
                       value={formData.priceCredits}
                       onChange={(e) => handleInputChange('priceCredits', parseInt(e.target.value) || 0)}
+                      onBlur={() => handleFieldBlur('priceCredits')}
                       placeholder="0"
                       min="0"
+                      className={isFieldInvalid('priceCredits') ? 'border-red-500 focus:border-red-500' : ''}
                     />
+                    {getFieldError('priceCredits') && (
+                      <p className="text-sm text-red-600">{getFieldError('priceCredits')}</p>
+                    )}
                   </div>
                 </div>
 
@@ -547,7 +758,10 @@ const Courses = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      resetForm();
+                    }}
                     disabled={isCreating}
                   >
                     Cancel

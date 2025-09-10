@@ -15,6 +15,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import adminService, { User, Course, SystemStats } from "@/services/adminService";
 import { 
   Users, 
@@ -92,6 +103,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'day' | 'week' | 'month' | 'year'>('month');
   const [systemHealth, setSystemHealth] = useState<any>(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   // Redirect non-admin users
   useEffect(() => {
@@ -125,7 +137,7 @@ const AdminDashboard = () => {
         }
         
         if (coursesResponse.success) {
-          setCourses(coursesResponse.data.courses || []);
+          setCourses(coursesResponse.data?.courses || []);
         }
         
         if (statsResponse.success) {
@@ -378,9 +390,27 @@ const AdminDashboard = () => {
                 <Users className="h-4 w-4 mr-2" />
                 Manage Users
               </Button>
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                Logout
-              </Button>
+              <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Logout
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to logout? You will need to sign in again to access the admin dashboard.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleLogout}>
+                      Logout
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </div>

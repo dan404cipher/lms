@@ -563,7 +563,7 @@ const UserManagement = () => {
                     <p className="text-sm text-muted-foreground mb-1">{user.email}</p>
                     <div className="flex items-center space-x-4 text-xs text-muted-foreground">
                       <span>Credits: {user.credits}</span>
-                      <span>Email: {user.emailVerified ? '✓ Verified' : '✗ Not Verified'}</span>
+                      {/* <span>Email: {user.emailVerified ? '✓ Verified' : '✗ Not Verified'}</span> */}
                       {user.lastLogin && (
                         <span>Last Login: {new Date(user.lastLogin).toLocaleDateString()}</span>
                       )}
@@ -802,7 +802,7 @@ const UserManagement = () => {
                 <div className="relative">
                   <Input
                     id="password"
-                    type={showPassword ? "text" : "password"}
+                    type={!showPassword ? "text" : "password"}
                     value={formData.password}
                     onChange={(e) => {
                       const newPassword = e.target.value;
