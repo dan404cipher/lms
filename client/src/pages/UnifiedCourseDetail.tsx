@@ -1752,23 +1752,54 @@ const UnifiedCourseDetail = () => {
                       <div>
                         <p className="font-medium">Course Status</p>
                         <p className="text-sm text-muted-foreground">
-                          {course.published ? 'Published' : 'Draft'} - {course.published ? 'Course is visible to students' : 'Course is in draft mode'}
+                          {course?.published ? 'Published' : 'Draft'} - {course?.published ? 'Course is visible to students' : 'Course is in draft mode'}
                         </p>
                       </div>
                       <Button
                         size="sm"
-                        variant={course.published ? "outline" : "default"}
+                        variant={course?.published ? "outline" : "default"}
                         onClick={async () => {
                           try {
-                            await adminService.updateCourseStatus(courseId!, course.published ? 'inactive' : 'active');
-                            // Refresh course data
-                            const response = await adminService.getCourseById(courseId!);
-                            setCourse((response.data) as any);
+                            const newStatus = course?.published ? 'inactive' : 'active';
+                            const actionText = course?.published ? 'unpublished' : 'published';
+                            
+                            await adminService.updateCourseStatus(courseId!, newStatus);
+                            
+                            // Update local state immediately for better UX
+                            setCourse(prevCourse => {
+                              if (!prevCourse) return null;
+                              return {
+                                ...prevCourse,
+                                published: !prevCourse.published
+                              };
+                            });
+                            
                             toast({
                               title: "Success",
-                              description: `Course ${course.published ? 'unpublished' : 'published'} successfully.`,
+                              description: `Course ${actionText} successfully.`,
                             });
+                            
+                            // Refresh course data in background to ensure consistency
+                            try {
+                              const response = await adminService.getCourseById(courseId!);
+                              // Convert Course to CourseDetail format
+                              const courseData = response.data as any;
+                              setCourse({
+                                ...courseData,
+                                instructor: courseData.instructorId ? {
+                                  name: courseData.instructorId.name,
+                                  email: courseData.instructorId.email
+                                } : { name: 'Unknown Instructor' },
+                                category: courseData.categoryId ? {
+                                  name: courseData.categoryId.name
+                                } : { name: 'Uncategorized' }
+                              } as CourseDetail);
+                            } catch (refreshError) {
+                              console.error('Error refreshing course data:', refreshError);
+                              // Don't show error to user since the main action succeeded
+                            }
                           } catch (error) {
+                            console.error('Error updating course status:', error);
                             toast({
                               title: "Error",
                               description: "Failed to update course status.",
@@ -1777,7 +1808,7 @@ const UnifiedCourseDetail = () => {
                           }
                         }}
                       >
-                        {course.published ? 'Unpublish' : 'Publish'} Course
+                        {course?.published ? 'Unpublish' : 'Publish'} Course
                       </Button>
                     </div>
                   </div>

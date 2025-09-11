@@ -28,6 +28,14 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
         return res.status(401).json({ message: 'Not authorized, user not found' });
       }
 
+      // Check if user is active
+      if (user.status !== 'active') {
+        return res.status(401).json({ 
+          message: 'Account is inactive or suspended',
+          status: user.status 
+        });
+      }
+
       req.user = user;
       next();
       return;

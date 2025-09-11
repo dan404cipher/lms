@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import authService from '../services/authService';
+import authService, { setGlobalErrorHandler } from '../services/authService';
 
 interface AuthContextType {
   user: any;
@@ -7,6 +7,7 @@ interface AuthContextType {
   register: (data: any) => Promise<void>;
   logout: () => void;
   loading: boolean;
+  handleApiError: (error: any) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,9 +23,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then(response => {
           if (response.success) {
             setUser(response.data.user);
-            if(response.data.user && response.data.user.status!=="active"){
-              localStorage.removeItem('access_token');
-              localStorage.removeItem('token')
+            // Check if user status is not active and logout if so
+            if (response.data.user && response.data.user.status !== 'active') {
+              console.log('User status is not active:', response.data.user.status);
+              localStorage.removeItem('token');
+              localStorage.removeItem('refreshToken');
+              setUser(null);
             }
           } else {
             // Invalid response format, clear tokens
@@ -36,9 +40,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .catch((error) => {
           console.log('Profile fetch failed:', error.response?.status);
           console.log('Profile fetch error:', error);
-          // Let the service layer handle authentication errors
-          // The service will automatically redirect to login if needed
-          setUser(null);
+          
+          // Check if error is due to inactive/suspended status
+          if (error.response?.status === 401 && error.response?.data?.status) {
+            console.log('User account is inactive or suspended:', error.response.data.status);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            setUser(null);
+          } else {
+            // Let the service layer handle other authentication errors
+            setUser(null);
+          }
         })
         .finally(() => {
           setLoading(false);
@@ -73,8 +85,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  // Function to check user status periodically
+  const checkUserStatus = async () => {
+    if (!user) return;
+    
+    try {
+      const response = await authService.getProfile();
+      if (response.success && response.data.user) {
+        // If user status changed to inactive/suspended, logout
+        if (response.data.user.status !== 'active') {
+          console.log('User status changed to:', response.data.user.status, '- logging out');
+          alert(`Your account has been ${response.data.user.status}. You have been logged out.`);
+          logout();
+        }
+      }
+    } catch (error) {
+      // If profile fetch fails due to status change, logout
+      if (error.response?.status === 401 && error.response?.data?.status) {
+        console.log('User account status changed:', error.response.data.status, '- logging out');
+        alert(`Your account has been ${error.response.data.status}. You have been logged out.`);
+        logout();
+      }
+    }
+  };
+
+  // Function to handle API errors that might indicate status change
+  const handleApiError = (error: any) => {
+    if (error.response?.status === 401 && error.response?.data?.status) {
+      console.log('API error indicates user status change:', error.response.data.status, '- logging out');
+      alert(`Your account has been ${error.response.data.status}. You have been logged out.`);
+      logout();
+    }
+  };
+
+  // Register the error handler with the auth service
+  useEffect(() => {
+    setGlobalErrorHandler(handleApiError);
+  }, []);
+
+  // Set up periodic status check every 30 seconds
+  useEffect(() => {
+    if (!user) return;
+
+    const interval = setInterval(checkUserStatus, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Check user status when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    if (!user) return;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkUserStatus();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, handleApiError }}>
       {children}
     </AuthContext.Provider>
   );

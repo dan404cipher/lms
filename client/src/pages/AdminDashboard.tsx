@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,6 +105,17 @@ const AdminDashboard = () => {
   const [timeframe, setTimeframe] = useState<'day' | 'week' | 'month' | 'year'>('month');
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  
+  // User search and filter states
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<string>('all');
+  const [showUserSearchInput, setShowUserSearchInput] = useState(false);
+  const [showUserFilterDropdown, setShowUserFilterDropdown] = useState(false);
+  
+  // Refs for click outside detection
+  const userSearchRef = useRef<HTMLDivElement>(null);
+  const userFilterRef = useRef<HTMLDivElement>(null);
 
   // Redirect non-admin users
   useEffect(() => {
@@ -137,7 +149,10 @@ const AdminDashboard = () => {
         }
         
         if (coursesResponse.success) {
-          setCourses(coursesResponse.data?.courses || []);
+          console.log('Courses response:', coursesResponse);
+          setCourses(coursesResponse.data || []);
+        } else {
+          console.log('Courses response failed:', coursesResponse);
         }
         
         if (statsResponse.success) {
@@ -192,6 +207,8 @@ const AdminDashboard = () => {
 
       } catch (error) {
         console.error('Error fetching admin data:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        
         // Set fallback data
         setUsers([]);
         setCourses([]);
@@ -211,6 +228,23 @@ const AdminDashboard = () => {
 
     fetchAdminData();
   }, [timeframe]);
+
+  // Handle click outside to close dropdowns
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userSearchRef.current && !userSearchRef.current.contains(event.target as Node)) {
+        setShowUserSearchInput(false);
+      }
+      if (userFilterRef.current && !userFilterRef.current.contains(event.target as Node)) {
+        setShowUserFilterDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -359,6 +393,22 @@ const AdminDashboard = () => {
     
     return adminColors[colorIndex];
   };
+
+  // Filter users based on search query and filters
+  const filteredUsers = Array.isArray(users) ? users.filter(user => {
+    const matchesSearch = userSearchQuery === '' || 
+      user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      user.email.toLowerCase().includes(userSearchQuery.toLowerCase());
+    
+    const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
+    const matchesStatus = userStatusFilter === 'all' || user.status === userStatusFilter;
+    
+    return matchesSearch && matchesRole && matchesStatus;
+  }) : [];
+
+  // Debug logging
+  console.log('Current courses state:', courses);
+  console.log('Courses length:', Array.isArray(courses) ? courses.length : 'not an array');
 
   if (loading) {
     return (
@@ -625,8 +675,18 @@ const AdminDashboard = () => {
                       <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
                         Top Courses
+                        {Array.isArray(courses) && courses.length === 0 && (
+                          <Badge variant="secondary" className="text-xs ml-2">
+                            Demo Data
+                          </Badge>
+                        )}
                       </CardTitle>
-                      <CardDescription>Most popular courses by enrollment</CardDescription>
+                      <CardDescription>
+                        {Array.isArray(courses) && courses.length > 0 
+                          ? "Most popular courses by enrollment" 
+                          : "Sample courses (demo data)"
+                        }
+                      </CardDescription>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => navigate('/courses')}>
                       <Eye className="h-4 w-4 mr-2" />
@@ -636,7 +696,7 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {courses.slice(0, 5).map((course, index) => (
+                    {Array.isArray(courses) && courses.length > 0 ? courses.slice(0, 5).map((course, index) => (
                       <div key={course._id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -660,7 +720,36 @@ const AdminDashboard = () => {
                           </p>
                         </div>
                       </div>
-                    ))}
+                    )) : (
+                      // Fallback mock data when no courses are available
+                      [
+                        { _id: '1', title: 'Introduction to Programming', instructorId: { name: 'John Smith' }, stats: { enrollments: 150, averageRating: 4.5 } },
+                        { _id: '2', title: 'Web Development Fundamentals', instructorId: { name: 'Sarah Johnson' }, stats: { enrollments: 120, averageRating: 4.3 } },
+                        { _id: '3', title: 'Data Science Basics', instructorId: { name: 'Mike Chen' }, stats: { enrollments: 95, averageRating: 4.7 } },
+                        { _id: '4', title: 'Mobile App Development', instructorId: { name: 'Emily Davis' }, stats: { enrollments: 80, averageRating: 4.2 } },
+                        { _id: '5', title: 'Machine Learning Intro', instructorId: { name: 'Alex Rodriguez' }, stats: { enrollments: 65, averageRating: 4.6 } }
+                      ].map((course, index) => (
+                        <div key={course._id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-medium text-blue-600">{index + 1}</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 truncate">{course.title}</p>
+                              <p className="text-xs text-gray-600">{course.instructorId.name}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-gray-900">
+                              {course.stats.enrollments} enrollments
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {course.stats.averageRating}★
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -708,7 +797,7 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {users.slice(0, 4).map((user) => (
+                    {Array.isArray(users) ? users.slice(0, 4).map((user) => (
                       <div key={user._id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src="" />
@@ -722,7 +811,7 @@ const AdminDashboard = () => {
                         </div>
                         {getRoleBadge(user.role)}
                       </div>
-                    ))}
+                    )) : []}
                   </div>
                 </CardContent>
               </Card>
@@ -878,7 +967,7 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {courses.slice(0, 5).map((course) => (
+                    {Array.isArray(courses) ? courses.slice(0, 5).map((course) => (
                       <div key={course._id} className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="font-medium truncate">{course.title}</span>
@@ -895,7 +984,7 @@ const AdminDashboard = () => {
                           <span>{course.stats?.averageProgress || 0}%</span>
                         </div>
                       </div>
-                    ))}
+                    )) : []}
                   </div>
                 </CardContent>
               </Card>
@@ -1068,14 +1157,89 @@ const AdminDashboard = () => {
                     <CardDescription>Overview of all system users</CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
-                      <Search className="h-4 w-4 mr-2" />
-                      Search
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Filter className="h-4 w-4 mr-2" />
-                      Filter
-                    </Button>
+                    <div className="relative" ref={userSearchRef}>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowUserSearchInput(!showUserSearchInput)}
+                      >
+                        <Search className="h-4 w-4 mr-2" />
+                        Search
+                      </Button>
+                      {showUserSearchInput && (
+                        <div className="absolute top-full left-0 mt-2 w-64 z-10">
+                          <Input
+                            placeholder="Search users by name or email..."
+                            value={userSearchQuery}
+                            onChange={(e) => setUserSearchQuery(e.target.value)}
+                            className="bg-white border shadow-lg"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative" ref={userFilterRef}>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setShowUserFilterDropdown(!showUserFilterDropdown)}
+                      >
+                        <Filter className="h-4 w-4 mr-2" />
+                        Filter
+                      </Button>
+                      {showUserFilterDropdown && (
+                        <div className="absolute top-full left-0 mt-2 w-64 z-10 bg-white border shadow-lg rounded-md p-3">
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">Role</label>
+                              <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Roles</SelectItem>
+                                  <SelectItem value="learner">Learner</SelectItem>
+                                  <SelectItem value="instructor">Instructor</SelectItem>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                  <SelectItem value="super_admin">Super Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-gray-700">Status</label>
+                              <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All Status</SelectItem>
+                                  <SelectItem value="active">Active</SelectItem>
+                                  <SelectItem value="inactive">Inactive</SelectItem>
+                                  <SelectItem value="suspended">Suspended</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => {
+                                  setUserRoleFilter('all');
+                                  setUserStatusFilter('all');
+                                }}
+                              >
+                                Clear
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                onClick={() => setShowUserFilterDropdown(false)}
+                              >
+                                Apply
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <Button onClick={() => navigate('/admin/users')}>
                       <UserPlus className="h-4 w-4 mr-2" />
                       Manage Users
@@ -1084,8 +1248,35 @@ const AdminDashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Filter Status */}
+                {(userSearchQuery || userRoleFilter !== 'all' || userStatusFilter !== 'all') && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-blue-700">
+                          Showing {filteredUsers.length} of {Array.isArray(users) ? users.length : 0} users
+                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          Filtered
+                        </Badge>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => {
+                          setUserSearchQuery('');
+                          setUserRoleFilter('all');
+                          setUserStatusFilter('all');
+                        }}
+                      >
+                        Clear Filters
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="space-y-4">
-                  {users.slice(0, 10).map((user) => (
+                  {Array.isArray(filteredUsers) ? filteredUsers.slice(0, 10).map((user) => (
                     <div key={user._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-4">
                         <Avatar className="h-10 w-10">
@@ -1118,7 +1309,7 @@ const AdminDashboard = () => {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                  )) : []}
                 </div>
               </CardContent>
             </Card>
@@ -1211,7 +1402,7 @@ const AdminDashboard = () => {
                </CardHeader>
                <CardContent>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                   {courses.slice(0, 12).map((course) => (
+                   {Array.isArray(courses) ? courses.slice(0, 12).map((course) => (
                      <Card 
                        key={course._id} 
                        className="hover:shadow-md transition-all duration-200 cursor-pointer border-0 shadow-sm"
@@ -1263,7 +1454,7 @@ const AdminDashboard = () => {
                          </div>
                        </CardContent>
                      </Card>
-                   ))}
+                   )) : []}
                  </div>
                </CardContent>
              </Card>

@@ -2,6 +2,13 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+// Global error handler for status changes
+let globalErrorHandler: ((error: any) => void) | null = null;
+
+export const setGlobalErrorHandler = (handler: (error: any) => void) => {
+  globalErrorHandler = handler;
+};
+
 // Create axios instance for auth requests
 const authAxios = axios.create({
   baseURL: API_URL
@@ -24,6 +31,15 @@ authAxios.interceptors.response.use(
     
     // Don't handle 401 errors for login requests - let them be handled by the login component
     if (error.response?.status === 401 && originalRequest.url?.includes('/auth/login')) {
+      return Promise.reject(error);
+    }
+    
+    // Don't retry if error is due to user status (inactive/suspended)
+    if (error.response?.status === 401 && error.response?.data?.status) {
+      // Call global error handler if available
+      if (globalErrorHandler) {
+        globalErrorHandler(error);
+      }
       return Promise.reject(error);
     }
     
