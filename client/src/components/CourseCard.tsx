@@ -1,6 +1,7 @@
 import { Clock, Users, Star, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
 
 interface CourseCardProps {
   title: string;
@@ -25,8 +26,9 @@ const CourseCard = ({
   category,
   thumbnail,
 }: CourseCardProps) => {
+  const navigate=useNavigate();
   return (
-    <div className="group bg-card rounded-xl overflow-hidden shadow-medium hover:shadow-large transition-all duration-200 hover:-translate-y-1 animate-scale-in">
+    <div className="group bg-card rounded-xl overflow-hidden shadow-medium hover:shadow-large transition-all duration-200 hover:-translate-y-1 animate-scale-in" onClick={()=>navigate('/courses')}>
       <div className="relative overflow-hidden">
         <img
           src={thumbnail}

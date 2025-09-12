@@ -13,6 +13,7 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isFailed, setIsFailed] = useState(false);
   const [error, setError] = useState("");
   
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const ForgotPassword = () => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
+    setIsFailed(false);
 
     try {
      const response= await authService.forgotPassword(email);
@@ -31,14 +33,16 @@ const ForgotPassword = () => {
         title: "Reset email sent!",
         description: "Please check your email for password reset instructions.",
       });
+      setIsSubmitted(true);
      }
      else{
       toast({
-        title: "Fail to Reset email sent!",
+        title: "Failed to send reset email",
         description: response.message ||"Failed to send reset email. Please try again." , 
+        variant: "destructive",
       });
+      setIsFailed(true);
      }
-      setIsSubmitted(true);
    
     } catch (err: any) {
       console.log('err',err)
@@ -48,6 +52,7 @@ const ForgotPassword = () => {
         description: err.response?.data?.message || "Failed to send reset email. Please try again.",
         variant: "destructive",
       });
+      setIsFailed(true);
     } finally {
       setIsLoading(false);
     }
@@ -82,6 +87,63 @@ const ForgotPassword = () => {
                   variant="link"
                   className="p-0 h-auto text-primary"
                   onClick={() => setIsSubmitted(false)}
+                >
+                  try again with a different email address
+                </Button>
+              </div>
+              
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => navigate("/login")}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Login
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (isFailed) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center space-x-2 mb-4">
+              <BookOpen className="h-10 w-10 text-primary" />
+              <span className="text-2xl font-bold text-primary">Axess Upskill</span>
+            </div>
+          </div>
+
+          <Card className="shadow-lg">
+            <CardHeader className="space-y-1">
+              <div className="flex items-center justify-center mb-4">
+                <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+              </div>
+              <CardTitle className="text-2xl text-center text-red-600">Failed to Send Email</CardTitle>
+              <CardDescription className="text-center">
+                We couldn't send password reset instructions to {email}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center text-sm text-muted-foreground">
+                <p>This email address may not be registered with us.</p>
+                <p>Please check your email address or</p>
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-primary"
+                  onClick={() => {
+                    setIsFailed(false);
+                    setEmail("");
+                  }}
                 >
                   try again with a different email address
                 </Button>

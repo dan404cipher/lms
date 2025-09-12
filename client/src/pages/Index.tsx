@@ -7,6 +7,7 @@ import CourseCard from "@/components/CourseCard";
 import CategoryFilter from "@/components/CategoryFilter";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 // Import course images
 import course1 from "@/assets/course1.jpg";
@@ -16,6 +17,7 @@ import course4 from "@/assets/course4.jpg";
 
 const Index = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const navigate = useNavigate();
 
   const courses = [
     {
@@ -88,8 +90,8 @@ const Index = () => {
 
   const categories = [...new Set(courses.map(course => course.category))];
 
-  const filteredCourses = selectedCategory === "All" 
-    ? courses 
+  const filteredCourses = selectedCategory === "All"
+    ? courses
     : courses.filter(course => course.category === selectedCategory);
 
   return (
@@ -97,7 +99,7 @@ const Index = () => {
       <Navbar />
       <Hero />
       <Features />
-      
+
       {/* Course Catalog Section */}
       <section className="py-20">
         <div className="container mx-auto px-4">
@@ -110,7 +112,7 @@ const Index = () => {
             </p>
           </div>
 
-          <CategoryFilter 
+          <CategoryFilter
             categories={categories}
             selectedCategory={selectedCategory}
             onCategoryChange={setSelectedCategory}
@@ -126,7 +128,7 @@ const Index = () => {
           </div>
 
           <div className="text-center">
-            <Button variant="outline" size="lg">
+            <Button variant="outline" size="lg" onClick={() => navigate('/courses')}>
               View All Courses
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
@@ -137,7 +139,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="bg-muted/30 py-12">
         <div className="container mx-auto px-4">
-                      <div className="grid md:grid-cols-4 gap-4">
+          {/* <div className="grid md:grid-cols-4 gap-4">
             <div>
               <h3 className="font-bold text-foreground mb-4">Axess Upskill</h3>
               <p className="text-muted-foreground">
@@ -171,9 +173,9 @@ const Index = () => {
                 <li><a href="#" className="hover:text-primary transition-colors">FAQ</a></li>
               </ul>
             </div>
-          </div>
+          </div> */}
           <div className="border-t border-border mt-8 pt-8 text-center text-muted-foreground">
-            <p>&copy; 2024 Axess Upskill. All rights reserved.</p>
+            <p>&copy; 2025 Axess Upskill. All rights reserved.</p>
           </div>
         </div>
       </footer>

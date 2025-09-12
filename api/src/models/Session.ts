@@ -85,13 +85,29 @@ sessionSchema.index({ scheduledAt: 1 });
 
 // Virtual for session end time
 sessionSchema.virtual('endTime').get(function() {
-  return new Date(this.scheduledAt.getTime() + this.duration * 60000);
+  try {
+    if (!this.scheduledAt || !this.duration || !(this.scheduledAt instanceof Date)) {
+      return null;
+    }
+    return new Date(this.scheduledAt.getTime() + this.duration * 60000);
+  } catch (error) {
+    console.warn('Error calculating endTime for session:', this._id, error);
+    return null;
+  }
 });
 
 // Virtual for checking if session is currently live
 sessionSchema.virtual('isLive').get(function() {
-  const now = new Date();
-  return now >= this.scheduledAt && now <= this.endTime;
+  try {
+    if (!this.scheduledAt || !this.endTime || !(this.scheduledAt instanceof Date)) {
+      return false;
+    }
+    const now = new Date();
+    return now >= this.scheduledAt && now <= this.endTime;
+  } catch (error) {
+    console.warn('Error calculating isLive for session:', this._id, error);
+    return false;
+  }
 });
 
 // Ensure virtuals are serialized

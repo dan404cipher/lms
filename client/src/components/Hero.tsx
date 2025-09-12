@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Play, ArrowRight, BookOpen, Users, Award } from "lucide-react";
-
+import { useNavigate } from "react-router-dom";
 const Hero = () => {
+  const navigate = useNavigate();
   return (
     <section className="relative min-h-[600px] flex items-center bg-primary overflow-hidden">
       {/* Background decoration */}
@@ -30,12 +31,12 @@ const Hero = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 animate-slide-up [animation-delay:0.4s]">
-              <Button size="lg" variant="hero" className="bg-background text-primary hover:bg-background/90 shadow-medium">
+              <Button size="lg" variant="hero" className="bg-background text-primary hover:bg-background/90 shadow-medium" onClick={() => navigate('/courses')}>
                 <BookOpen className="h-5 w-5 mr-2" />
                 Explore Courses
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
-              <Button size="lg" variant="outline" className="border-white/20 text-blue-500 hover:bg-white/10">
+              <Button size="lg" variant="outline" className="border-white/20 text-blue-500 hover:bg-white/10" onClick={() => navigate('/courses')}>
                 <Play className="h-5 w-5 mr-2" />
                 Watch Demo
               </Button>
