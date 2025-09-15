@@ -1161,23 +1161,32 @@ const AdminDashboard = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="relative" ref={userSearchRef}>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setShowUserSearchInput(!showUserSearchInput)}
-                      >
-                        <Search className="h-4 w-4 mr-2" />
-                        Search
-                      </Button>
-                      {showUserSearchInput && (
-                        <div className="absolute top-full left-0 mt-2 w-64 z-10">
+                      {showUserSearchInput ? (
+                        <div className="flex items-center gap-2">
                           <Input
                             placeholder="Search users by name or email..."
                             value={userSearchQuery}
                             onChange={(e) => setUserSearchQuery(e.target.value)}
-                            className="bg-white border shadow-lg"
+                            className="w-64"
+                            autoFocus
                           />
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setShowUserSearchInput(false)}
+                          >
+                            Cancel
+                          </Button>
                         </div>
+                      ) : (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setShowUserSearchInput(true)}
+                        >
+                          <Search className="h-4 w-4 mr-2" />
+                          Search
+                        </Button>
                       )}
                     </div>
                     <div className="relative" ref={userFilterRef}>
@@ -1188,9 +1197,14 @@ const AdminDashboard = () => {
                       >
                         <Filter className="h-4 w-4 mr-2" />
                         Filter
+                        {(userRoleFilter !== 'all' || userStatusFilter !== 'all') && (
+                          <Badge variant="secondary" className="ml-2 text-xs">
+                            {(userRoleFilter !== 'all' ? 1 : 0) + (userStatusFilter !== 'all' ? 1 : 0)}
+                          </Badge>
+                        )}
                       </Button>
                       {showUserFilterDropdown && (
-                        <div className="absolute top-full left-0 mt-2 w-64 z-10 bg-white border shadow-lg rounded-md p-3">
+                        <div className="absolute top-full right-0 mt-2 w-64 z-10 bg-white border shadow-lg rounded-md p-3">
                           <div className="space-y-3">
                             <div>
                               <label className="text-sm font-medium text-gray-700">Role</label>
@@ -1262,6 +1276,21 @@ const AdminDashboard = () => {
                         <Badge variant="secondary" className="text-xs">
                           Filtered
                         </Badge>
+                        {userSearchQuery && (
+                          <Badge variant="outline" className="text-xs">
+                            Search: "{userSearchQuery}"
+                          </Badge>
+                        )}
+                        {userRoleFilter !== 'all' && (
+                          <Badge variant="outline" className="text-xs">
+                            Role: {userRoleFilter}
+                          </Badge>
+                        )}
+                        {userStatusFilter !== 'all' && (
+                          <Badge variant="outline" className="text-xs">
+                            Status: {userStatusFilter}
+                          </Badge>
+                        )}
                       </div>
                       <Button 
                         size="sm" 
@@ -1270,9 +1299,11 @@ const AdminDashboard = () => {
                           setUserSearchQuery('');
                           setUserRoleFilter('all');
                           setUserStatusFilter('all');
+                          setShowUserSearchInput(false);
+                          setShowUserFilterDropdown(false);
                         }}
                       >
-                        Clear Filters
+                        Clear All
                       </Button>
                     </div>
                   </div>
