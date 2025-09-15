@@ -363,6 +363,11 @@ const UserManagement = () => {
     return '';
   };
 
+  const formatPhoneInput = (value: string): string => {
+    // Only allow numbers, +, -, (, ), and spaces
+    return value.replace(/[^0-9+\-() ]/g, '');
+  };
+
   const validateWebsite = (website: string): string => {
     if (!website) return '';
     
@@ -957,10 +962,10 @@ const UserManagement = () => {
                   placeholder="+1 (555) 123-4567"
                   value={formData.phone}
                   onChange={(e) => {
-                    const newPhone = e.target.value;
-                    setFormData({ ...formData, phone: newPhone });
-                    if (newPhone) {
-                      setErrors(prev => ({ ...prev, phone: validatePhone(newPhone) }));
+                    const formattedPhone = formatPhoneInput(e.target.value);
+                    setFormData({ ...formData, phone: formattedPhone });
+                    if (formattedPhone) {
+                      setErrors(prev => ({ ...prev, phone: validatePhone(formattedPhone) }));
                     } else {
                       setErrors(prev => ({ ...prev, phone: '' }));
                     }
@@ -1263,10 +1268,10 @@ const UserManagement = () => {
                   placeholder="+1 (555) 123-4567"
                   value={formData.phone}
                   onChange={(e) => {
-                    const newPhone = e.target.value;
-                    setFormData({ ...formData, phone: newPhone });
-                    if (newPhone) {
-                      setErrors(prev => ({ ...prev, phone: validatePhone(newPhone) }));
+                    const formattedPhone = formatPhoneInput(e.target.value);
+                    setFormData({ ...formData, phone: formattedPhone });
+                    if (formattedPhone) {
+                      setErrors(prev => ({ ...prev, phone: validatePhone(formattedPhone) }));
                     } else {
                       setErrors(prev => ({ ...prev, phone: '' }));
                     }

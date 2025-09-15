@@ -152,7 +152,7 @@ const ScheduleSessionModal = ({ isOpen, onClose, courseId, onSessionCreated }: S
   const handleSubmit = async () => {
     if (!courseId || !sessionName.trim() || !selectedDate || !selectedTime) {
       toast({
-        title: "Validation Error",
+        title: "Session Schedule Failed",
         description: "Please fill in all required fields.",
         variant: "destructive"
       });

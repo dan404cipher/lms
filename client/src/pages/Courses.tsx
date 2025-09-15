@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Search, X } from "lucide-react";
 
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
@@ -21,10 +21,11 @@ interface Course {
   _id: string;
   title: string;
   description: string;
-  instructor: {
+  shortDescription?: string;
+  instructor?: {
     name: string;
   };
-  category: {
+  category?: {
     name: string;
   };
   courseCode?: string;
@@ -46,11 +47,13 @@ const Courses = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
   const [instructors, setInstructors] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -345,6 +348,23 @@ const Courses = () => {
     fetchCourses();
   }, [user?.role, user?._id]);
 
+  // Filter courses based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredCourses(courses);
+    } else {
+      const filtered = courses.filter(course => 
+        course.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.shortDescription?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.courseCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.instructor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        course.category?.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredCourses(filtered);
+    }
+  }, [courses, searchTerm]);
+
   // Load categories and instructors for course creation
   useEffect(() => {
     if (user?.role === 'admin' || user?.role === 'instructor') {
@@ -554,8 +574,8 @@ const Courses = () => {
 
   return (
     <div className="container mx-auto">
-      <div className="mb-3">
-        <div className="flex items-center justify-between">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold text-foreground">
             {user?.role === 'admin' ? 'All Courses' : user?.role === 'instructor' ? 'My Teaching Courses' : 'Active Courses'}
           </h1>
@@ -567,24 +587,73 @@ const Courses = () => {
             </Button>
           )}
         </div>
+        
+        {/* Search Input */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            type="text"
+            placeholder="Search courses by title, description, instructor, or category..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-10"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+              onClick={() => setSearchTerm('')}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        
+        {/* Search Results Info */}
+        {searchTerm && (
+          <div className="mt-2 text-sm text-muted-foreground">
+            {filteredCourses.length === 0 ? (
+              <span>No courses found matching "{searchTerm}"</span>
+            ) : (
+              <span>
+                {filteredCourses.length} course{filteredCourses.length !== 1 ? 's' : ''} found
+                {filteredCourses.length !== courses.length && ` out of ${courses.length} total`}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {courses.length === 0 ? (
+      {filteredCourses.length === 0 ? (
         <div className="col-span-full text-center py-8">
           <div className="text-muted-foreground">
-            <p className="text-lg font-medium">No courses found</p>
+            <p className="text-lg font-medium">
+              {searchTerm ? 'No courses found' : 'No courses available'}
+            </p>
             <p className="text-sm mt-2">
-              {user?.role === 'admin' 
+              {searchTerm 
+                ? `No courses match your search for "${searchTerm}". Try a different search term.`
+                : user?.role === 'admin' 
                 ? 'There are no courses in the system yet.' 
                 : user?.role === 'instructor' 
                 ? 'You are not assigned to any courses yet.' 
                 : 'No courses are available for you yet.'}
             </p>
+            {searchTerm && (
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setSearchTerm('')}
+              >
+                Clear Search
+              </Button>
+            )}
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map((course) => (
+          {filteredCourses.map((course) => (
             <Card 
               key={course._id} 
               className="hover:shadow-md transition-all duration-200 cursor-pointer border-0 shadow-sm"
@@ -602,6 +671,18 @@ const Courses = () => {
                     <h3 className="font-medium text-foreground text-sm line-clamp-2 leading-tight">
                       {course.title}
                     </h3>
+                    {/* Course Info */}
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {course.instructor?.name && (
+                        <span>Instructor: {course.instructor.name}</span>
+                      )}
+                      {course.instructor?.name && course.category?.name && (
+                        <span> • </span>
+                      )}
+                      {course.category?.name && (
+                        <span>Category: {course.category.name}</span>
+                      )}
+                    </div>
                   </div>
                   
                   {/* Progress Bar - Only show for non-admin users */}
