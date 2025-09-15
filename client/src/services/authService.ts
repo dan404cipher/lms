@@ -149,6 +149,11 @@ class AuthService {
     const response = await authAxios.post('/auth/change-password', data);
     return response.data;
   }
+
+  async updateProfile(data: { bio?: string; location?: string; phone?: string; website?: string }): Promise<any> {
+    const response = await authAxios.put('/auth/profile', data);
+    return response.data;
+  }
 }
 
 export default new AuthService();
