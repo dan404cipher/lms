@@ -1991,3 +1991,75 @@ export const downloadGeneralMaterial = async (req: AuthRequest, res: Response, n
     next(error);
   }
 };
+
+// @desc    Download lesson content file (Instructor)
+// @route   GET /api/instructor/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download
+// @access  Private (instructor, admin)
+export const downloadLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, moduleId, lessonId, fileId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user has permission to access this course
+    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    // Find the lesson
+    const lesson = await Lesson.findOne({ _id: lessonId, moduleId });
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Find the specific file in the lesson
+    const file = lesson.files?.find(f => f._id.toString() === fileId);
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found in this lesson'
+      });
+    }
+
+    // Check if it's a local file
+    if (file.url.startsWith('/uploads/')) {
+      const path = require('path');
+      const fs = require('fs');
+      const filePath = path.join(process.cwd(), file.url.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for file download
+        res.setHeader('Content-Type', file.type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'File not found on server'
+        });
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.json({
+      success: true,
+      message: 'File download initiated',
+      data: {
+        downloadUrl: file.url,
+        fileName: file.name
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

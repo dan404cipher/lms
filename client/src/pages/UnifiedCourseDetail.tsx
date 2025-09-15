@@ -675,6 +675,48 @@ const UnifiedCourseDetail = () => {
     }
   };
 
+  const handleDownloadLessonContent = async (file: any, moduleId: string, lessonId: string) => {
+    if (!courseId) return;
+
+    try {
+      setLoading(true);
+
+      let blob;
+      if (isAdmin) {
+        blob = await adminService.downloadLessonContent(courseId, moduleId, lessonId, file._id);
+      } else if (isInstructor) {
+        blob = await instructorService.downloadLessonContent(courseId, moduleId, lessonId, file._id);
+      } else {
+        // For learners/students
+        blob = await courseService.downloadLessonContent(courseId, moduleId, lessonId, file._id);
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Success",
+        description: `${file.name} downloaded successfully!`
+      });
+    } catch (error) {
+      console.error('Error downloading lesson content:', error);
+      toast({
+        title: "Download Failed",
+        description: `Failed to download ${file.name}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewVideo = (video: CourseVideo) => {
     console.log('Viewing video:', video);
   };
@@ -1295,6 +1337,25 @@ const UnifiedCourseDetail = () => {
                                     {lesson.files.length} file{lesson.files.length !== 1 ? 's' : ''}
                                   </Badge>
                                 )}
+                                {lesson.files && lesson.files.length > 0 && (
+                                  <div className="flex items-center space-x-1">
+                                    {lesson.files.map((file: any, index: number) => (
+                                      <Button
+                                        key={file._id}
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadLessonContent(file, module._id, lesson._id);
+                                        }}
+                                        title={`Download ${file.name}`}
+                                        className="h-6 w-6 p-0"
+                                      >
+                                        <Download className="h-3 w-3" />
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                               {(isInstructor || isAdmin) && (
                                 <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
@@ -1302,7 +1363,18 @@ const UnifiedCourseDetail = () => {
                                     {lesson.isPublished ? 'Published' : 'Draft'}
                                   </Badge>
                                   {lesson.files && lesson.files.length > 0 && (
-                                    <Button variant="ghost" size="sm">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Download all files in the lesson
+                                        lesson.files.forEach((file: any) => {
+                                          handleDownloadLessonContent(file, module._id, lesson._id);
+                                        });
+                                      }}
+                                      title="Download all files"
+                                    >
                                       <Download className="h-3 w-3" />
                                     </Button>
                                   )}

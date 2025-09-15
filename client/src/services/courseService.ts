@@ -86,6 +86,13 @@ class CourseService {
     });
     return response.data;
   }
+
+  async downloadLessonContent(courseId: string, moduleId: string, lessonId: string, fileId: string): Promise<Blob> {
+    const response = await courseAxios.get(`/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content/${fileId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
 }
 
 export default new CourseService();

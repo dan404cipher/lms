@@ -1668,3 +1668,65 @@ export const uploadLessonContent = async (req: AuthRequest, res: Response, next:
     });
   }
 };
+
+// @desc    Download lesson content file (Admin)
+// @route   GET /api/admin/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download
+// @access  Private (admin, super_admin)
+export const downloadLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, moduleId, lessonId, fileId } = req.params;
+
+    // Find the lesson
+    const lesson = await Lesson.findOne({ _id: lessonId, moduleId });
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Find the specific file in the lesson
+    const file = lesson.files?.find(f => f._id.toString() === fileId);
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found in this lesson'
+      });
+    }
+
+    // Check if it's a local file
+    if (file.url.startsWith('/uploads/')) {
+      const path = require('path');
+      const fs = require('fs');
+      const filePath = path.join(process.cwd(), file.url.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for file download
+        res.setHeader('Content-Type', file.type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'File not found on server'
+        });
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.json({
+      success: true,
+      message: 'File download initiated',
+      data: {
+        downloadUrl: file.url,
+        fileName: file.name
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

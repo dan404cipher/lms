@@ -42,7 +42,8 @@ import {
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
-  uploadLessonContent
+  uploadLessonContent,
+  downloadLessonContent
 } from '../controllers/instructorController';
 
 const router = express.Router();
@@ -89,6 +90,7 @@ router.post('/courses/:courseId/modules/:moduleId/lessons', createLesson);
 router.put('/courses/:courseId/modules/:moduleId/lessons/:lessonId', updateLesson);
 router.delete('/courses/:courseId/modules/:moduleId/lessons/:lessonId', deleteLesson);
 router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
+router.get('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download', downloadLessonContent);
 
 // Session Management
 router.get('/sessions', getSessions);
