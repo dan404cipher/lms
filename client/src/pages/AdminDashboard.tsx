@@ -147,6 +147,12 @@ const AdminDashboard = () => {
   const [showUserDetailsDialog, setShowUserDetailsDialog] = useState(false);
   const [showUserActionsDialog, setShowUserActionsDialog] = useState(false);
   
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [usersPerPage] = useState(10);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  
   // Refs for click outside detection
   const userSearchRef = useRef<HTMLDivElement>(null);
   const userFilterRef = useRef<HTMLDivElement>(null);
@@ -180,6 +186,12 @@ const AdminDashboard = () => {
         
         if (usersResponse.success) {
           setUsers(usersResponse.data.users || []);
+          // Set pagination data from API response
+          if (usersResponse.data.pagination) {
+            setTotalUsers(usersResponse.data.pagination.total);
+            setTotalPages(usersResponse.data.pagination.pages);
+            setCurrentPage(usersResponse.data.pagination.page);
+          }
         }
         
         if (coursesResponse.success) {
@@ -283,6 +295,27 @@ const AdminDashboard = () => {
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  // Fetch users for specific page
+  const fetchUsersForPage = async (page: number) => {
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: usersPerPage.toString()
+      });
+      const response = await adminService.getAllUsers(params);
+      if (response.success) {
+        setUsers(response.data.users || []);
+        if (response.data.pagination) {
+          setTotalUsers(response.data.pagination.total);
+          setTotalPages(response.data.pagination.pages);
+          setCurrentPage(response.data.pagination.page);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching users for page:', error);
+    }
   };
 
   // User management functions
@@ -508,6 +541,20 @@ const AdminDashboard = () => {
     
     return matchesSearch && matchesRole && matchesStatus;
   }) : [];
+
+  // Pagination logic - using server-side pagination
+  const startIndex = (currentPage - 1) * usersPerPage;
+  const endIndex = Math.min(startIndex + usersPerPage, totalUsers);
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    fetchUsersForPage(page);
+  };
+
+  // Reset to first page when filters change (for now, we'll keep client-side filtering)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [userSearchQuery, userRoleFilter, userStatusFilter]);
 
   // Debug logging
   console.log('Current courses state:', courses);
@@ -1349,6 +1396,7 @@ const AdminDashboard = () => {
                                 onClick={() => {
                                   setUserRoleFilter('all');
                                   setUserStatusFilter('all');
+                                  setCurrentPage(1);
                                 }}
                               >
                                 Clear
@@ -1378,7 +1426,7 @@ const AdminDashboard = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-blue-700">
-                          Showing {filteredUsers.length} of {Array.isArray(users) ? users.length : 0} users
+                          Showing {users.length} of {totalUsers} users (Page {currentPage} of {totalPages})
                         </span>
                         <Badge variant="secondary" className="text-xs">
                           Filtered
@@ -1408,6 +1456,7 @@ const AdminDashboard = () => {
                           setUserStatusFilter('all');
                           setShowUserSearchInput(false);
                           setShowUserFilterDropdown(false);
+                          setCurrentPage(1);
                         }}
                       >
                         Clear All
@@ -1417,7 +1466,7 @@ const AdminDashboard = () => {
                 )}
                 
                 <div className="space-y-4">
-                  {Array.isArray(filteredUsers) ? filteredUsers.slice(0, 10).map((user) => (
+                  {Array.isArray(users) ? users.map((user) => (
                     <div key={user._id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-4">
                         <Avatar className="h-10 w-10">
@@ -1497,6 +1546,71 @@ const AdminDashboard = () => {
                     </div>
                   )) : []}
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                    <div className="text-sm text-gray-600">
+                      Showing {startIndex + 1} to {endIndex} of {totalUsers} users
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      
+                      {/* Page Numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(pageNum)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* User Count Display (when no pagination) */}
+                {totalPages <= 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                    <div className="text-sm text-gray-600">
+                      Showing {totalUsers} of {totalUsers} users
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
