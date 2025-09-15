@@ -142,28 +142,28 @@ const instructorService = {
     return response.data;
   },
 
-  // Session Management
-  async getSessions(courseId: string) {
+  // Session Management (Course-specific)
+  async getCourseSessions(courseId: string) {
     const response = await instructorAxios.get(`/instructor/courses/${courseId}/sessions`);
     return response.data;
   },
 
-  async createSession(courseId: string, sessionData: any) {
+  async createCourseSession(courseId: string, sessionData: any) {
     const response = await instructorAxios.post(`/instructor/courses/${courseId}/sessions`, sessionData);
     return response.data;
   },
 
-  async updateSession(courseId: string, sessionId: string, sessionData: any) {
+  async updateCourseSession(courseId: string, sessionId: string, sessionData: any) {
     const response = await instructorAxios.put(`/instructor/courses/${courseId}/sessions/${sessionId}`, sessionData);
     return response.data;
   },
 
-  async deleteSession(courseId: string, sessionId: string) {
+  async deleteCourseSession(courseId: string, sessionId: string) {
     const response = await instructorAxios.delete(`/instructor/courses/${courseId}/sessions/${sessionId}`);
     return response.data;
   },
 
-  async startSession(courseId: string, sessionId: string) {
+  async startCourseSession(courseId: string, sessionId: string) {
     const response = await instructorAxios.post(`/instructor/courses/${courseId}/sessions/${sessionId}/start`, {});
     return response.data;
   },
@@ -251,6 +251,42 @@ const instructorService = {
 
   async getRecentMaterials() {
     const response = await instructorAxios.get('/instructor/dashboard/materials');
+    return response.data;
+  },
+
+  // All Sessions Management (without courseId requirement)
+  async getSessions() {
+    const response = await instructorAxios.get('/instructor/sessions');
+    return response.data;
+  },
+
+  async createSession(sessionData: any) {
+    const response = await instructorAxios.post('/instructor/sessions', sessionData);
+    return response.data;
+  },
+
+  async updateSession(sessionId: string, sessionData: any) {
+    const response = await instructorAxios.put(`/instructor/sessions/${sessionId}`, sessionData);
+    return response.data;
+  },
+
+  async deleteSession(sessionId: string) {
+    const response = await instructorAxios.delete(`/instructor/sessions/${sessionId}`);
+    return response.data;
+  },
+
+  async startSession(sessionId: string) {
+    const response = await instructorAxios.post(`/instructor/sessions/${sessionId}/start`, {});
+    return response.data;
+  },
+
+  async endSession(sessionId: string) {
+    const response = await instructorAxios.post(`/instructor/sessions/${sessionId}/end`, {});
+    return response.data;
+  },
+
+  async getSessionParticipants(sessionId: string) {
+    const response = await instructorAxios.get(`/instructor/sessions/${sessionId}/participants`);
     return response.data;
   },
 

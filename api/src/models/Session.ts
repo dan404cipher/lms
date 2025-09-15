@@ -15,6 +15,8 @@ export interface ISession extends Document {
   hasRecording?: boolean;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   maxParticipants?: number;
+  startedAt?: Date;
+  endedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   endTime: Date; // Virtual property
@@ -72,6 +74,12 @@ const sessionSchema = new Schema<ISession>({
   maxParticipants: {
     type: Number,
     min: [1, 'Max participants must be at least 1']
+  },
+  startedAt: {
+    type: Date
+  },
+  endedAt: {
+    type: Date
   }
 }, {
   timestamps: true

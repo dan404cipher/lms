@@ -263,7 +263,7 @@ const InstructorDashboard = () => {
               <div className="text-center py-8">
                 <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No upcoming sessions</p>
-                <Button onClick={() => navigate('/instructor/sessions/new')} className="mt-2">
+                <Button onClick={() => navigate('/instructor/sessions')} className="mt-2">
                   Schedule Session
                 </Button>
               </div>
@@ -323,7 +323,7 @@ const InstructorDashboard = () => {
               <div className="text-center py-8">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No recent assessments</p>
-                <Button onClick={() => navigate('/instructor/assessments/new')} className="mt-2">
+                <Button onClick={() => navigate('/courses')} className="mt-2">
                   Create Assessment
                 </Button>
               </div>
@@ -385,7 +385,7 @@ const InstructorDashboard = () => {
             <div className="text-center py-8">
               <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No materials uploaded</p>
-              <Button onClick={() => navigate('/instructor/materials/new')} className="mt-2">
+              <Button onClick={() => navigate('/courses')} className="mt-2">
                 Upload Material
               </Button>
             </div>

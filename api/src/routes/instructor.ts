@@ -18,9 +18,13 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  getSessions,
   createSession,
   updateSession,
   deleteSession,
+  startSession,
+  endSession,
+  getSessionParticipants,
   createAssessment,
   updateAssessment,
   deleteAssessment,
@@ -80,6 +84,15 @@ router.delete('/courses/:courseId/modules/:moduleId/lessons/:lessonId', deleteLe
 router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 
 // Session Management
+router.get('/sessions', getSessions);
+router.post('/sessions', createSession);
+router.put('/sessions/:sessionId', updateSession);
+router.delete('/sessions/:sessionId', deleteSession);
+router.post('/sessions/:sessionId/start', startSession);
+router.post('/sessions/:sessionId/end', endSession);
+router.get('/sessions/:sessionId/participants', getSessionParticipants);
+
+// Course-specific Session Management
 router.post('/courses/:courseId/sessions', createSession);
 router.put('/courses/:courseId/sessions/:sessionId', updateSession);
 router.delete('/courses/:courseId/sessions/:sessionId', deleteSession);

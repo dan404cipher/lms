@@ -41,38 +41,15 @@ export const getMyCourses = async (req: AuthRequest, res: Response, next: NextFu
         .populate('instructorId', 'name')
         .sort({ createdAt: -1 });
     } else {
-      // Instructors can only see courses they are enrolled in
+      // Instructors can see courses they are teaching (where they are the instructorId)
       console.log('getMyCourses - Fetching courses for instructor ID:', req.user._id);
       
-      // Get enrollments for this instructor (check all statuses for debugging)
-      const instructorEnrollments = await Enrollment.find({ 
-        userId: req.user._id
-      });
-      
-      // For instructors, we ONLY use enrollment-based logic
-      // This ensures that instructors see courses they are enrolled in through batch management
-      
-      // Filter for active/completed enrollments
-      const activeEnrollments = instructorEnrollments.filter(enrollment => 
-        ['active', 'completed'].includes(enrollment.status)
-      );
-      
-      if (activeEnrollments.length === 0) {
-        courses = [];
-      } else {
-        // Get course IDs from enrollments
-        const courseIds = activeEnrollments.map(enrollment => enrollment.courseId);
-        
-        // Fetch courses where instructor is enrolled
-        courses = await Course.find({ 
-          _id: { $in: courseIds }
-        })
-        .populate('categoryId', 'name')
-        .populate('instructorId', 'name')
-        .sort({ createdAt: -1 });
-        
-        // Fetch courses where instructor is enrolled
-      }
+      courses = await Course.find({ 
+        instructorId: req.user._id
+      })
+      .populate('categoryId', 'name')
+      .populate('instructorId', 'name')
+      .sort({ createdAt: -1 });
     }
     
     // Process courses with additional data
@@ -695,18 +672,34 @@ export const createLesson = async (req: AuthRequest, res: Response, next: NextFu
 // Session Management
 export const createSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const courseId = req.params.courseId;
+    const courseId = req.params.courseId || req.body.courseId;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
-    if (!course) {
-      return res.status(404).json({
+    if (!courseId) {
+      return res.status(400).json({
         success: false,
-        message: 'Course not found or you do not have permission to access it'
+        message: 'Course ID is required'
       });
     }
 
-    const { title, description, type, scheduledAt, duration } = req.body;
+    // Check if the course exists and the instructor has access to it
+    const course = await Course.findOne({ _id: courseId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if the instructor has access to this course
+    if (course.instructorId.toString() !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to create sessions for this course'
+      });
+    }
+
+    const { title, description, type, scheduledAt, duration, maxParticipants } = req.body;
 
     const session = new Session({
       courseId,
@@ -716,11 +709,16 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       type: type || 'live-class',
       scheduledAt,
       duration: duration || 60,
+      maxParticipants: maxParticipants || 50,
       status: 'scheduled',
       hasRecording: false
     });
 
     await session.save();
+
+    // Populate course and instructor data for response
+    await session.populate('courseId', 'title');
+    await session.populate('instructorId', 'name');
 
     res.status(201).json({
       success: true,
@@ -1134,27 +1132,26 @@ export const deleteLesson = async (req: AuthRequest, res: Response, next: NextFu
 
 export const updateSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { courseId, sessionId } = req.params;
+    const sessionId = req.params.sessionId;
+    const courseId = req.params.courseId;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found or you do not have permission to access it'
-      });
+    // Build query based on whether courseId is provided
+    const query: any = { _id: sessionId, instructorId: userId };
+    if (courseId) {
+      query.courseId = courseId;
     }
 
     const session = await Session.findOneAndUpdate(
-      { _id: sessionId, courseId },
+      query,
       req.body,
       { new: true, runValidators: true }
-    );
+    ).populate('courseId', 'title').populate('instructorId', 'name');
 
     if (!session) {
       return res.status(404).json({
         success: false,
-        message: 'Session not found'
+        message: 'Session not found or you do not have permission to access it'
       });
     }
 
@@ -1169,22 +1166,21 @@ export const updateSession = async (req: AuthRequest, res: Response, next: NextF
 
 export const deleteSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { courseId, sessionId } = req.params;
+    const sessionId = req.params.sessionId;
+    const courseId = req.params.courseId;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found or you do not have permission to access it'
-      });
+    // Build query based on whether courseId is provided
+    const query: any = { _id: sessionId, instructorId: userId };
+    if (courseId) {
+      query.courseId = courseId;
     }
 
-    const session = await Session.findOneAndDelete({ _id: sessionId, courseId });
+    const session = await Session.findOneAndDelete(query);
     if (!session) {
       return res.status(404).json({
         success: false,
-        message: 'Session not found'
+        message: 'Session not found or you do not have permission to access it'
       });
     }
 
@@ -1477,6 +1473,177 @@ export const uploadLessonContent = async (req: AuthRequest, res: Response, next:
   } catch (error) {
     console.error('uploadLessonContent (instructor) - Error:', error);
     console.error('uploadLessonContent (instructor) - Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    next(error);
+  }
+};
+
+// Get all sessions for instructor
+export const getSessions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const instructorId = req.user._id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const query: any = { instructorId };
+
+    // Filter by status
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+
+    // Filter by course
+    if (req.query.courseId) {
+      query.courseId = req.query.courseId;
+    }
+
+    // Filter by date range
+    if (req.query.startDate && req.query.endDate) {
+      query.scheduledAt = {
+        $gte: new Date(req.query.startDate as string),
+        $lte: new Date(req.query.endDate as string)
+      };
+    }
+
+    const sessions = await Session.find(query)
+      .populate('courseId', 'title')
+      .populate('instructorId', 'name')
+      .sort({ scheduledAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Session.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        sessions,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Start session
+export const startSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const instructorId = req.user._id;
+
+    const session = await Session.findOne({ _id: sessionId, instructorId });
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found or you do not have permission to access it'
+      });
+    }
+
+    if (session.status !== 'scheduled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Session can only be started if it is scheduled'
+      });
+    }
+
+    session.status = 'live';
+    session.startedAt = new Date();
+    await session.save();
+
+    res.json({
+      success: true,
+      message: 'Session started successfully',
+      data: { session }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// End session
+export const endSession = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const instructorId = req.user._id;
+
+    const session = await Session.findOne({ _id: sessionId, instructorId });
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found or you do not have permission to access it'
+      });
+    }
+
+    if (session.status !== 'live') {
+      return res.status(400).json({
+        success: false,
+        message: 'Session can only be ended if it is live'
+      });
+    }
+
+    session.status = 'completed';
+    session.endedAt = new Date();
+    await session.save();
+
+    res.json({
+      success: true,
+      message: 'Session ended successfully',
+      data: { session }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get session participants
+export const getSessionParticipants = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const instructorId = req.user._id;
+
+    const session = await Session.findOne({ _id: sessionId, instructorId })
+      .populate('courseId', 'title');
+    
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found or you do not have permission to access it'
+      });
+    }
+
+    // Get enrolled students for this course
+    const enrollments = await Enrollment.find({ 
+      courseId: session.courseId,
+      status: { $in: ['active', 'completed'] }
+    }).populate('userId', 'name email');
+
+    const participants = enrollments.map(enrollment => ({
+      _id: (enrollment.userId as any)._id,
+      name: (enrollment.userId as any).name,
+      email: (enrollment.userId as any).email,
+      enrollmentDate: enrollment.enrolledAt,
+      status: enrollment.status
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        session: {
+          _id: session._id,
+          title: session.title,
+          courseTitle: (session.courseId as any).title
+        },
+        participants,
+        totalParticipants: participants.length
+      }
+    });
+  } catch (error) {
     next(error);
   }
 };

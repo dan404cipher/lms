@@ -13,6 +13,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import InstructorDashboard from "./pages/InstructorDashboard";
+import InstructorSessions from "./pages/InstructorSessions";
 import AdminDashboard from "./pages/AdminDashboard";
 import Courses from "./pages/Courses";
 import UnifiedCourseDetail from "./pages/UnifiedCourseDetail";
@@ -50,6 +51,7 @@ const App = () => (
                   
                   {/* Instructor Routes */}
                   <Route path="/instructor/dashboard" element={<Layout><InstructorDashboard /></Layout>} />
+                  <Route path="/instructor/sessions" element={<Layout><InstructorSessions /></Layout>} />
                   <Route path="/instructor/courses/:courseId" element={<Layout><UnifiedCourseDetail /></Layout>} />
                   
                   {/* Admin Routes */}
