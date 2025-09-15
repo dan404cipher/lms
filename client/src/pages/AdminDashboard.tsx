@@ -404,6 +404,18 @@ const AdminDashboard = () => {
     const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
     const matchesStatus = userStatusFilter === 'all' || user.status === userStatusFilter;
     
+    // Debug logging
+    console.log('Filtering user:', user.name, {
+      searchQuery: userSearchQuery,
+      roleFilter: userRoleFilter,
+      statusFilter: userStatusFilter,
+      userRole: user.role,
+      userStatus: user.status,
+      matchesSearch,
+      matchesRole,
+      matchesStatus
+    });
+    
     return matchesSearch && matchesRole && matchesStatus;
   }) : [];
 
@@ -1173,7 +1185,10 @@ const AdminDashboard = () => {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => setShowUserSearchInput(false)}
+                            onClick={() => {
+                              setShowUserSearchInput(false);
+                              setUserSearchQuery('');
+                            }}
                           >
                             Cancel
                           </Button>
@@ -1208,32 +1223,34 @@ const AdminDashboard = () => {
                           <div className="space-y-3">
                             <div>
                               <label className="text-sm font-medium text-gray-700">Role</label>
-                              <Select value={userRoleFilter} onValueChange={setUserRoleFilter}>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">All Roles</SelectItem>
-                                  <SelectItem value="learner">Learner</SelectItem>
-                                  <SelectItem value="instructor">Instructor</SelectItem>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                  <SelectItem value="super_admin">Super Admin</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="relative">
+                                <select 
+                                  value={userRoleFilter} 
+                                  onChange={(e) => setUserRoleFilter(e.target.value)}
+                                  className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="all">All Roles</option>
+                                  <option value="learner">Learner</option>
+                                  <option value="instructor">Instructor</option>
+                                  <option value="admin">Admin</option>
+                                  <option value="super_admin">Super Admin</option>
+                                </select>
+                              </div>
                             </div>
                             <div>
                               <label className="text-sm font-medium text-gray-700">Status</label>
-                              <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">All Status</SelectItem>
-                                  <SelectItem value="active">Active</SelectItem>
-                                  <SelectItem value="inactive">Inactive</SelectItem>
-                                  <SelectItem value="suspended">Suspended</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="relative">
+                                <select 
+                                  value={userStatusFilter} 
+                                  onChange={(e) => setUserStatusFilter(e.target.value)}
+                                  className="w-full p-2 border border-gray-300 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="all">All Status</option>
+                                  <option value="active">Active</option>
+                                  <option value="inactive">Inactive</option>
+                                  <option value="suspended">Suspended</option>
+                                </select>
+                              </div>
                             </div>
                             <div className="flex gap-2">
                               <Button 
@@ -1250,7 +1267,7 @@ const AdminDashboard = () => {
                                 size="sm" 
                                 onClick={() => setShowUserFilterDropdown(false)}
                               >
-                                Apply
+                                Done
                               </Button>
                             </div>
                           </div>
@@ -1269,7 +1286,7 @@ const AdminDashboard = () => {
                 {(userSearchQuery || userRoleFilter !== 'all' || userStatusFilter !== 'all') && (
                   <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-blue-700">
                           Showing {filteredUsers.length} of {Array.isArray(users) ? users.length : 0} users
                         </span>
