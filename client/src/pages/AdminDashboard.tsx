@@ -103,6 +103,7 @@ const AdminDashboard = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [activeTab, setActiveTab] = useState('overview');
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
@@ -545,7 +546,7 @@ const AdminDashboard = () => {
 
 
         {/* Main Content */}
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs defaultValue="overview" className="space-y-6" onValueChange={setActiveTab}>
           <div className="flex items-center justify-between">
             <TabsList className="grid w-full grid-cols-4 lg:w-auto">
               <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -554,19 +555,21 @@ const AdminDashboard = () => {
               <TabsTrigger value="courses">Courses</TabsTrigger>
             </TabsList>
             
-            <div className="flex items-center gap-2">
-              <Select value={timeframe} onValueChange={(value: any) => setTimeframe(value)}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">Today</SelectItem>
-                  <SelectItem value="week">This Week</SelectItem>
-                  <SelectItem value="month">This Month</SelectItem>
-                  <SelectItem value="year">This Year</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {activeTab === 'overview' && (
+              <div className="flex items-center gap-2">
+                <Select value={timeframe} onValueChange={(value: any) => setTimeframe(value)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">Today</SelectItem>
+                    <SelectItem value="week">This Week</SelectItem>
+                    <SelectItem value="month">This Month</SelectItem>
+                    <SelectItem value="year">This Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <TabsContent value="overview" className="space-y-6">
