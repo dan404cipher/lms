@@ -250,6 +250,11 @@ class AdminService {
     return response.data;
   }
 
+  async updateUserStatus(userId: string, status: string): Promise<AdminResponse<User>> {
+    const response = await adminAxios.patch(`/admin/users/${userId}/status`, { status });
+    return response.data;
+  }
+
   // Course Management
   async getAllCourses(): Promise<AdminResponse<Course[]>> {
     const response = await adminAxios.get('/admin/courses');

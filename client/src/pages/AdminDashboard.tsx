@@ -27,6 +27,22 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import adminService, { User, Course, SystemStats } from "@/services/adminService";
 import { 
   Users, 
@@ -37,7 +53,6 @@ import {
   Activity,
   UserPlus,
   FileText,
-  Calendar,
   TrendingUp,
   Shield,
   Database,
@@ -60,7 +75,15 @@ import {
   Network,
   Bell,
   Search,
-  Filter
+  Filter,
+  Edit,
+  Trash2,
+  UserCheck,
+  UserX,
+  Mail,
+  Phone,
+  Calendar,
+  CreditCard
 } from "lucide-react";
 
 interface AnalyticsData {
@@ -107,12 +130,22 @@ const AdminDashboard = () => {
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
+  // Stable random numbers for demo stats
+  const [newThisWeekCount] = useState(() => Math.floor(Math.random() * 50) + 20);
+  const [newUsersTodayCount] = useState(() => Math.floor(Math.random() * 20) + 5);
+  const [coursesPublishedCount] = useState(() => Math.floor(Math.random() * 5) + 2);
+  
   // User search and filter states
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
   const [userStatusFilter, setUserStatusFilter] = useState<string>('all');
   const [showUserSearchInput, setShowUserSearchInput] = useState(false);
   const [showUserFilterDropdown, setShowUserFilterDropdown] = useState(false);
+  
+  // User management states
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showUserDetailsDialog, setShowUserDetailsDialog] = useState(false);
+  const [showUserActionsDialog, setShowUserActionsDialog] = useState(false);
   
   // Refs for click outside detection
   const userSearchRef = useRef<HTMLDivElement>(null);
@@ -250,6 +283,63 @@ const AdminDashboard = () => {
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  // User management functions
+  const handleViewUser = (user: User) => {
+    setSelectedUser(user);
+    setShowUserDetailsDialog(true);
+  };
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    // Navigate to user edit page or open edit modal
+    navigate(`/admin/users/${user._id}/edit`);
+  };
+
+  const handleSuspendUser = async (user: User) => {
+    try {
+      // Call API to suspend user
+      const response = await adminService.updateUserStatus(user._id, 'suspended');
+      if (response.success) {
+        // Update local state
+        setUsers(users.map(u => u._id === user._id ? { ...u, status: 'suspended' } : u));
+        setShowUserActionsDialog(false);
+        setSelectedUser(null);
+      }
+    } catch (error) {
+      console.error('Error suspending user:', error);
+    }
+  };
+
+  const handleActivateUser = async (user: User) => {
+    try {
+      // Call API to activate user
+      const response = await adminService.updateUserStatus(user._id, 'active');
+      if (response.success) {
+        // Update local state
+        setUsers(users.map(u => u._id === user._id ? { ...u, status: 'active' } : u));
+        setShowUserActionsDialog(false);
+        setSelectedUser(null);
+      }
+    } catch (error) {
+      console.error('Error activating user:', error);
+    }
+  };
+
+  const handleDeleteUser = async (user: User) => {
+    try {
+      // Call API to delete user
+      const response = await adminService.deleteUser(user._id);
+      if (response.success) {
+        // Update local state
+        setUsers(users.filter(u => u._id !== user._id));
+        setShowUserActionsDialog(false);
+        setSelectedUser(null);
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+    }
   };
 
   const getRoleBadge = (role: string) => {
@@ -592,7 +682,7 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-blue-700">New Users Today</p>
-                      <p className="text-2xl font-bold text-blue-900">+{Math.floor(Math.random() * 20) + 5}</p>
+                      <p className="text-2xl font-bold text-blue-900">+{newUsersTodayCount}</p>
                     </div>
                     <div className="h-10 w-10 bg-blue-200 rounded-lg flex items-center justify-center">
                       <UserPlus className="h-5 w-5 text-blue-700" />
@@ -606,7 +696,7 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-green-700">Courses Published</p>
-                      <p className="text-2xl font-bold text-green-900">+{Math.floor(Math.random() * 5) + 2}</p>
+                      <p className="text-2xl font-bold text-green-900">+{coursesPublishedCount}</p>
                     </div>
                     <div className="h-10 w-10 bg-green-200 rounded-lg flex items-center justify-center">
                       <BookOpen className="h-5 w-5 text-green-700" />
@@ -1134,7 +1224,7 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-600">New This Week</p>
-                      <p className="text-2xl font-bold text-gray-900">+{Math.floor(Math.random() * 50) + 20}</p>
+                      <p className="text-2xl font-bold text-gray-900">+{newThisWeekCount}</p>
                       <p className="text-xs text-blue-600">+12% from last week</p>
                     </div>
                     <div className="h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -1352,12 +1442,57 @@ const AdminDashboard = () => {
                             Joined {new Date(user.createdAt).toLocaleDateString()}
                           </p>
                         </div>
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewUser(user)}
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        {/* <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleViewUser(user)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {user.status === 'active' ? (
+                              <DropdownMenuItem 
+                                onClick={() => handleSuspendUser(user)}
+                                className="text-yellow-600"
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Suspend User
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem 
+                                onClick={() => handleActivateUser(user)}
+                                className="text-green-600"
+                              >
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Activate User
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem 
+                              onClick={() => handleDeleteUser(user)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu> */}
                       </div>
                     </div>
                   )) : []}
@@ -1512,6 +1647,159 @@ const AdminDashboard = () => {
            </TabsContent>
         </Tabs>
       </div>
+
+      {/* User Details Dialog */}
+      <Dialog open={showUserDetailsDialog} onOpenChange={setShowUserDetailsDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              User Details
+            </DialogTitle>
+            <DialogDescription>
+              Complete information about the selected user
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedUser && (
+            <div className="space-y-6">
+              {/* User Header */}
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src="" />
+                  <AvatarFallback className="bg-primary/10 text-primary text-lg">
+                    {selectedUser.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold text-gray-900">{selectedUser.name}</h3>
+                  <p className="text-gray-600">{selectedUser.email}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {getRoleBadge(selectedUser.role)}
+                    {getStatusBadge(selectedUser.status)}
+                  </div>
+                </div>
+              </div>
+
+              {/* User Information Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Personal Information</label>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">{selectedUser.email}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">
+                          Joined {new Date(selectedUser.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">{selectedUser.credits} Credits</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Account Status</label>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Status</span>
+                        {getStatusBadge(selectedUser.status)}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Role</span>
+                        {getRoleBadge(selectedUser.role)}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Last Active</span>
+                        <span className="text-sm text-gray-600">
+                          {selectedUser.lastLogin 
+                            ? new Date(selectedUser.lastLogin).toLocaleDateString()
+                            : 'Never'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Activity Summary</label>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Courses Enrolled</span>
+                        <span className="text-sm font-medium">0</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Courses Completed</span>
+                        <span className="text-sm font-medium">0</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Total Sessions</span>
+                        <span className="text-sm font-medium">0</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">Average Rating</span>
+                        <span className="text-sm font-medium">N/A</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* <div>
+                    <label className="text-sm font-medium text-gray-700">Quick Actions</label>
+                    <div className="mt-2 flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setShowUserDetailsDialog(false);
+                          handleEditUser(selectedUser);
+                        }}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      {selectedUser.status === 'active' ? (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setShowUserDetailsDialog(false);
+                            handleSuspendUser(selectedUser);
+                          }}
+                          className="text-yellow-600"
+                        >
+                          <UserX className="h-4 w-4 mr-2" />
+                          Suspend
+                        </Button>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setShowUserDetailsDialog(false);
+                            handleActivateUser(selectedUser);
+                          }}
+                          className="text-green-600"
+                        >
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Activate
+                        </Button>
+                      )}
+                    </div>
+                  </div> */}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
