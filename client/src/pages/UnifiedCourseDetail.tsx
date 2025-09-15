@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { formatDuration } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1215,7 +1216,7 @@ const UnifiedCourseDetail = () => {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Duration</span>
-                      <span className="font-medium">{course.duration ? `${course.duration} hours` : 'Not set'}</span>
+                      <span className="font-medium">{formatDuration(course.duration)}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Price</span>

@@ -61,6 +61,8 @@ const Courses = () => {
     priceCredits: 0,
     difficulty: 'beginner',
     duration: 0,
+    durationHours: 0,
+    durationMinutes: 0,
     language: 'en',
     tags: [],
     requirements: [],
@@ -70,6 +72,27 @@ const Courses = () => {
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+
+  // Duration conversion functions
+  const convertToTotalMinutes = (hours: number, minutes: number): number => {
+    return (hours * 60) + minutes;
+  };
+
+  const convertFromTotalMinutes = (totalMinutes: number): { hours: number; minutes: number } => {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return { hours, minutes };
+  };
+
+  const updateDurationFromHoursMinutes = (hours: number, minutes: number) => {
+    const totalMinutes = convertToTotalMinutes(hours, minutes);
+    setFormData(prev => ({ 
+      ...prev, 
+      durationHours: hours,
+      durationMinutes: minutes,
+      duration: totalMinutes 
+    }));
+  };
 
   // Validation functions
   const validateField = (field: string, value: any): string => {
@@ -141,7 +164,25 @@ const Courses = () => {
           return 'Duration must be at least 1 minute';
         }
         if (value > 10080) { // 7 days in minutes
-          return 'Duration cannot exceed 7 days (10,080 minutes)';
+          return 'Duration cannot exceed 7 days (168 hours)';
+        }
+        return '';
+
+      case 'durationHours':
+        if (value < 0) {
+          return 'Hours cannot be negative';
+        }
+        if (value > 168) { // 7 days
+          return 'Hours cannot exceed 168 (7 days)';
+        }
+        return '';
+
+      case 'durationMinutes':
+        if (value < 0) {
+          return 'Minutes cannot be negative';
+        }
+        if (value > 59) {
+          return 'Minutes cannot exceed 59';
         }
         return '';
 
@@ -167,6 +208,15 @@ const Courses = () => {
     if (user?.role === 'admin') {
       requiredFields.push('instructorId');
     }
+
+    // Validate duration fields
+    const durationError = validateField('duration', formData.duration);
+    const hoursError = validateField('durationHours', formData.durationHours);
+    const minutesError = validateField('durationMinutes', formData.durationMinutes);
+    
+    if (durationError) errors.duration = durationError;
+    if (hoursError) errors.durationHours = hoursError;
+    if (minutesError) errors.durationMinutes = minutesError;
 
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field as keyof typeof formData]);
@@ -359,7 +409,7 @@ const Courses = () => {
     e.preventDefault();
     
     // Mark all fields as touched to show validation errors
-    const allFields = ['title', 'description', 'shortDescription', 'categoryId', 'duration', 'courseCode', 'priceCredits'];
+    const allFields = ['title', 'description', 'shortDescription', 'categoryId', 'duration', 'durationHours', 'durationMinutes', 'courseCode', 'priceCredits'];
     if (user?.role === 'admin') {
       allFields.push('instructorId');
     }
@@ -430,10 +480,18 @@ const Courses = () => {
   };
 
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Mark field as touched
-    setTouchedFields(prev => new Set(prev).add(field));
+    if (field === 'durationHours') {
+      const hours = parseInt(value) || 0;
+      updateDurationFromHoursMinutes(hours, formData.durationMinutes);
+      setTouchedFields(prev => new Set(prev).add('durationHours').add('duration'));
+    } else if (field === 'durationMinutes') {
+      const minutes = parseInt(value) || 0;
+      updateDurationFromHoursMinutes(formData.durationHours, minutes);
+      setTouchedFields(prev => new Set(prev).add('durationMinutes').add('duration'));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+      setTouchedFields(prev => new Set(prev).add(field));
+    }
     
     // Validate field in real-time
     const error = validateField(field, value);
@@ -471,6 +529,8 @@ const Courses = () => {
       priceCredits: 0,
       difficulty: 'beginner',
       duration: 0,
+      durationHours: 0,
+      durationMinutes: 0,
       language: 'en',
       tags: [],
       requirements: [],
@@ -719,21 +779,53 @@ const Courses = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="duration">Duration (minutes) *</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      value={formData.duration}
-                      onChange={(e) => handleInputChange('duration', parseInt(e.target.value) || 0)}
-                      onBlur={() => handleFieldBlur('duration')}
-                      placeholder="0"
-                      min="1"
-                      className={isFieldInvalid('duration') ? 'border-red-500 focus:border-red-500' : ''}
-                      required
-                    />
-                    {getFieldError('duration') && (
-                      <p className="text-sm text-red-600">{getFieldError('duration')}</p>
+                    <Label htmlFor="duration">Duration *</Label>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Input
+                          id="durationHours"
+                          type="number"
+                          value={formData.durationHours}
+                          onChange={(e) => handleInputChange('durationHours', parseInt(e.target.value) || 0)}
+                          onBlur={() => handleFieldBlur('durationHours')}
+                          placeholder="0"
+                          min="0"
+                          max="168"
+                          className={isFieldInvalid('durationHours') ? 'border-red-500 focus:border-red-500' : ''}
+                        />
+                        <Label htmlFor="durationHours" className="text-xs text-muted-foreground">Hours</Label>
+                      </div>
+                      <div className="flex-1">
+                        <Input
+                          id="durationMinutes"
+                          type="number"
+                          value={formData.durationMinutes}
+                          onChange={(e) => handleInputChange('durationMinutes', parseInt(e.target.value) || 0)}
+                          onBlur={() => handleFieldBlur('durationMinutes')}
+                          placeholder="0"
+                          min="0"
+                          max="59"
+                          className={isFieldInvalid('durationMinutes') ? 'border-red-500 focus:border-red-500' : ''}
+                        />
+                        <Label htmlFor="durationMinutes" className="text-xs text-muted-foreground">Minutes</Label>
+                      </div>
+                    </div>
+                    {(getFieldError('duration') || getFieldError('durationHours') || getFieldError('durationMinutes')) && (
+                      <div className="space-y-1">
+                        {getFieldError('duration') && (
+                          <p className="text-sm text-red-600">{getFieldError('duration')}</p>
+                        )}
+                        {getFieldError('durationHours') && (
+                          <p className="text-sm text-red-600">{getFieldError('durationHours')}</p>
+                        )}
+                        {getFieldError('durationMinutes') && (
+                          <p className="text-sm text-red-600">{getFieldError('durationMinutes')}</p>
+                        )}
+                      </div>
                     )}
+                    <div className="text-xs text-muted-foreground">
+                      Total: {formData.duration} minutes ({Math.floor(formData.duration / 60)}h {formData.duration % 60}m)
+                    </div>
                   </div>
                   
                   <div className="space-y-2">
