@@ -25,9 +25,16 @@ import {
   startSession,
   endSession,
   getSessionParticipants,
+  getAssessments,
   createAssessment,
   updateAssessment,
   deleteAssessment,
+  getAssessmentSubmissions,
+  getAllMaterials,
+  createGeneralMaterial,
+  updateGeneralMaterial,
+  deleteGeneralMaterial,
+  downloadGeneralMaterial,
   uploadMaterial,
   downloadMaterial,
   updateMaterial,
@@ -97,10 +104,24 @@ router.post('/courses/:courseId/sessions', createSession);
 router.put('/courses/:courseId/sessions/:sessionId', updateSession);
 router.delete('/courses/:courseId/sessions/:sessionId', deleteSession);
 
-// Assessment Management
+// Assessment Management (General)
+router.get('/assessments', getAssessments);
+router.post('/assessments', createAssessment);
+router.put('/assessments/:assessmentId', updateAssessment);
+router.delete('/assessments/:assessmentId', deleteAssessment);
+router.get('/assessments/:assessmentId/submissions', getAssessmentSubmissions);
+
+// Course-specific Assessment Management
 router.post('/courses/:courseId/assessments', createAssessment);
 router.put('/courses/:courseId/assessments/:assessmentId', updateAssessment);
 router.delete('/courses/:courseId/assessments/:assessmentId', deleteAssessment);
+
+// Material Management (General)
+router.get('/materials', getAllMaterials);
+router.post('/materials', createGeneralMaterial);
+router.put('/materials/:materialId', updateGeneralMaterial);
+router.delete('/materials/:materialId', deleteGeneralMaterial);
+router.get('/materials/:materialId/download', downloadGeneralMaterial);
 
 // Material Management
 router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);

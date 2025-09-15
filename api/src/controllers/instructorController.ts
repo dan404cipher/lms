@@ -732,9 +732,17 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
 // Assessment Management
 export const createAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const courseId = req.params.courseId;
+    const courseId = req.params.courseId || req.body.courseId;
     const userId = req.user._id;
 
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Course ID is required'
+      });
+    }
+
+    // Check if the course exists and the instructor has access to it
     const course = await Course.findOne({ _id: courseId, instructorId: userId });
     if (!course) {
       return res.status(404).json({
@@ -760,9 +768,25 @@ export const createAssessment = async (req: AuthRequest, res: Response, next: Ne
 
     await assessment.save();
 
+    // Populate course information for response
+    await assessment.populate('courseId', 'title');
+
     res.status(201).json({
       success: true,
-      data: { assessment }
+      data: { 
+        assessment: {
+          _id: assessment._id,
+          title: assessment.title,
+          description: assessment.description,
+          type: assessment.type,
+          courseId: assessment.courseId._id,
+          courseTitle: (assessment.courseId as any).title,
+          dueDate: assessment.dueDate,
+          maxScore: assessment.totalPoints,
+          status: assessment.isPublished ? 'published' : 'draft',
+          createdAt: assessment.createdAt
+        }
+      }
     });
   } catch (error) {
     next(error);
@@ -1195,19 +1219,18 @@ export const deleteSession = async (req: AuthRequest, res: Response, next: NextF
 
 export const updateAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { courseId, assessmentId } = req.params;
+    const courseId = req.params.courseId;
+    const { assessmentId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found or you do not have permission to access it'
-      });
+    // Build query based on whether courseId is provided
+    const query: any = { _id: assessmentId, instructorId: userId };
+    if (courseId) {
+      query.courseId = courseId;
     }
 
     const assessment = await Assessment.findOneAndUpdate(
-      { _id: assessmentId, courseId },
+      query,
       req.body,
       { new: true, runValidators: true }
     );
@@ -1215,13 +1238,29 @@ export const updateAssessment = async (req: AuthRequest, res: Response, next: Ne
     if (!assessment) {
       return res.status(404).json({
         success: false,
-        message: 'Assessment not found'
+        message: 'Assessment not found or you do not have permission to access it'
       });
     }
 
+    // Populate course information for response
+    await assessment.populate('courseId', 'title');
+
     res.json({
       success: true,
-      data: { assessment }
+      data: { 
+        assessment: {
+          _id: assessment._id,
+          title: assessment.title,
+          description: assessment.description,
+          type: assessment.type,
+          courseId: assessment.courseId._id,
+          courseTitle: (assessment.courseId as any).title,
+          dueDate: assessment.dueDate,
+          maxScore: assessment.totalPoints,
+          status: assessment.isPublished ? 'published' : 'draft',
+          createdAt: assessment.createdAt
+        }
+      }
     });
   } catch (error) {
     next(error);
@@ -1230,28 +1269,135 @@ export const updateAssessment = async (req: AuthRequest, res: Response, next: Ne
 
 export const deleteAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { courseId, assessmentId } = req.params;
+    const courseId = req.params.courseId;
+    const { assessmentId } = req.params;
     const userId = req.user._id;
 
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
-    if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found or you do not have permission to access it'
-      });
+    // Build query based on whether courseId is provided
+    const query: any = { _id: assessmentId, instructorId: userId };
+    if (courseId) {
+      query.courseId = courseId;
     }
 
-    const assessment = await Assessment.findOneAndDelete({ _id: assessmentId, courseId });
+    const assessment = await Assessment.findOneAndDelete(query);
     if (!assessment) {
       return res.status(404).json({
         success: false,
-        message: 'Assessment not found'
+        message: 'Assessment not found or you do not have permission to access it'
       });
     }
 
     res.json({
       success: true,
       message: 'Assessment deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// General Assessment Management (without courseId requirement)
+export const getAssessments = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    const { type, status, page = 1, limit = 10 } = req.query;
+
+    // Build query
+    const query: any = { instructorId: userId };
+    
+    if (type && type !== 'all') {
+      query.type = type;
+    }
+    
+    if (status && status !== 'all') {
+      query.isPublished = status === 'published';
+    }
+
+    // Calculate pagination
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // Get assessments with course information
+    const assessments = await Assessment.find(query)
+      .populate('courseId', 'title')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit));
+
+    // Get total count for pagination
+    const total = await Assessment.countDocuments(query);
+
+    // Calculate additional stats for each assessment
+    const assessmentsWithStats = await Promise.all(
+      assessments.map(async (assessment) => {
+        // Get submission count (this would need a Submission model)
+        const submissions = 0; // Placeholder - would need to implement submission tracking
+        
+        // Calculate average score (placeholder)
+        const averageScore = null; // Placeholder - would need to implement score calculation
+
+        return {
+          _id: assessment._id,
+          title: assessment.title,
+          description: assessment.description,
+          type: assessment.type,
+          courseId: assessment.courseId._id,
+          courseTitle: (assessment.courseId as any).title,
+          dueDate: assessment.dueDate,
+          maxScore: assessment.totalPoints,
+          submissions,
+          averageScore,
+          status: assessment.isPublished ? 'published' : 'draft',
+          createdAt: assessment.createdAt,
+          questions: 0 // Placeholder - would need to implement question counting
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        assessments: assessmentsWithStats,
+        pagination: {
+          current: Number(page),
+          pages: Math.ceil(total / Number(limit)),
+          total
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAssessmentSubmissions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { assessmentId } = req.params;
+    const userId = req.user._id;
+
+    // Verify the assessment belongs to the instructor
+    const assessment = await Assessment.findOne({ _id: assessmentId, instructorId: userId });
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or you do not have permission to access it'
+      });
+    }
+
+    // Placeholder for submissions - would need to implement submission tracking
+    const submissions: any[] = [];
+
+    res.json({
+      success: true,
+      data: {
+        submissions,
+        assessment: {
+          _id: assessment._id,
+          title: assessment.title,
+          type: assessment.type,
+          dueDate: assessment.dueDate,
+          totalPoints: assessment.totalPoints
+        }
+      }
     });
   } catch (error) {
     next(error);
@@ -1642,6 +1788,204 @@ export const getSessionParticipants = async (req: AuthRequest, res: Response, ne
         participants,
         totalParticipants: participants.length
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// General Material Management Functions
+
+export const getAllMaterials = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+
+    let materials;
+    if (isAdmin) {
+      // Admins can see all materials
+      materials = await Material.find({})
+        .populate('courseId', 'title courseCode')
+        .populate('uploadedBy', 'name')
+        .sort({ createdAt: -1 });
+    } else {
+      // Instructors can only see materials from their courses
+      const instructorCourses = await Course.find({ instructorId: userId }).select('_id');
+      const courseIds = instructorCourses.map(course => course._id);
+      
+      materials = await Material.find({ courseId: { $in: courseIds } })
+        .populate('courseId', 'title courseCode')
+        .populate('uploadedBy', 'name')
+        .sort({ createdAt: -1 });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        materials
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createGeneralMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { title, description, type, courseId, fileUrl } = req.body;
+    const userId = req.user._id;
+
+    // Verify course exists and user has permission
+    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    const materialData: any = {
+      title,
+      description,
+      type,
+      courseId,
+      uploadedBy: userId,
+      status: 'published'
+    };
+
+    if (type === 'link' && fileUrl) {
+      materialData.fileUrl = fileUrl;
+    }
+
+    const material = new Material(materialData);
+    await material.save();
+
+    await material.populate('courseId', 'title courseCode');
+    await material.populate('uploadedBy', 'name');
+
+    res.status(201).json({
+      success: true,
+      data: {
+        material
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateGeneralMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { materialId } = req.params;
+    const { title, description, type, fileUrl, status } = req.body;
+    const userId = req.user._id;
+
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Verify course exists and user has permission
+    const course = await Course.findOne({ _id: material.courseId, instructorId: userId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    const updateData: any = {};
+    if (title) updateData.title = title;
+    if (description) updateData.description = description;
+    if (type) updateData.type = type;
+    if (status) updateData.status = status;
+    if (fileUrl) updateData.fileUrl = fileUrl;
+
+    const updatedMaterial = await Material.findByIdAndUpdate(
+      materialId,
+      updateData,
+      { new: true }
+    ).populate('courseId', 'title courseCode').populate('uploadedBy', 'name');
+
+    res.json({
+      success: true,
+      data: {
+        material: updatedMaterial
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteGeneralMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { materialId } = req.params;
+    const userId = req.user._id;
+
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Verify course exists and user has permission
+    const course = await Course.findOne({ _id: material.courseId, instructorId: userId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    await Material.findByIdAndDelete(materialId);
+
+    res.json({
+      success: true,
+      message: 'Material deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const downloadGeneralMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { materialId } = req.params;
+    const userId = req.user._id;
+
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Verify course exists and user has permission
+    const course = await Course.findOne({ _id: material.courseId, instructorId: userId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    if (material.type === 'link' && material.fileUrl) {
+      return res.redirect(material.fileUrl);
+    }
+
+    // For file downloads, you would implement file serving logic here
+    // This is a placeholder - you'd need to implement actual file serving
+    res.json({
+      success: true,
+      message: 'File download not implemented yet',
+      fileUrl: material.fileUrl
     });
   } catch (error) {
     next(error);

@@ -168,8 +168,36 @@ const instructorService = {
     return response.data;
   },
 
-  // Material Management
-  async getMaterials(courseId: string) {
+  // Material Management (General)
+  async getMaterials() {
+    const response = await instructorAxios.get('/instructor/materials');
+    return response.data;
+  },
+
+  async createMaterial(materialData: any) {
+    const response = await instructorAxios.post('/instructor/materials', materialData);
+    return response.data;
+  },
+
+  async updateMaterial(materialId: string, materialData: any) {
+    const response = await instructorAxios.put(`/instructor/materials/${materialId}`, materialData);
+    return response.data;
+  },
+
+  async deleteMaterial(materialId: string) {
+    const response = await instructorAxios.delete(`/instructor/materials/${materialId}`);
+    return response.data;
+  },
+
+  async downloadMaterial(materialId: string): Promise<Blob> {
+    const response = await instructorAxios.get(`/instructor/materials/${materialId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  // Course-specific Material Management
+  async getCourseMaterials(courseId: string) {
     const response = await instructorAxios.get(`/instructor/courses/${courseId}/materials`);
     return response.data;
   },
@@ -183,19 +211,19 @@ const instructorService = {
     return response.data;
   },
 
-  async downloadMaterial(courseId: string, materialId: string): Promise<Blob> {
+  async downloadCourseMaterial(courseId: string, materialId: string): Promise<Blob> {
     const response = await instructorAxios.get(`/instructor/courses/${courseId}/materials/${materialId}/download`, {
       responseType: 'blob'
     });
     return response.data;
   },
 
-  async updateMaterial(courseId: string, materialId: string, materialData: any) {
+  async updateCourseMaterial(courseId: string, materialId: string, materialData: any) {
     const response = await instructorAxios.put(`/instructor/courses/${courseId}/materials/${materialId}`, materialData);
     return response.data;
   },
 
-  async deleteMaterial(courseId: string, materialId: string) {
+  async deleteCourseMaterial(courseId: string, materialId: string) {
     const response = await instructorAxios.delete(`/instructor/courses/${courseId}/materials/${materialId}`);
     return response.data;
   },
@@ -287,6 +315,32 @@ const instructorService = {
 
   async getSessionParticipants(sessionId: string) {
     const response = await instructorAxios.get(`/instructor/sessions/${sessionId}/participants`);
+    return response.data;
+  },
+
+  // Assessment Management
+  async getAssessments() {
+    const response = await instructorAxios.get('/instructor/assessments');
+    return response.data;
+  },
+
+  async createAssessment(assessmentData: any) {
+    const response = await instructorAxios.post('/instructor/assessments', assessmentData);
+    return response.data;
+  },
+
+  async updateAssessment(assessmentId: string, assessmentData: any) {
+    const response = await instructorAxios.put(`/instructor/assessments/${assessmentId}`, assessmentData);
+    return response.data;
+  },
+
+  async deleteAssessment(assessmentId: string) {
+    const response = await instructorAxios.delete(`/instructor/assessments/${assessmentId}`);
+    return response.data;
+  },
+
+  async getAssessmentSubmissions(assessmentId: string) {
+    const response = await instructorAxios.get(`/instructor/assessments/${assessmentId}/submissions`);
     return response.data;
   },
 

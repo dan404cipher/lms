@@ -639,8 +639,15 @@ const UnifiedCourseDetail = () => {
     try {
       setLoading(true);
 
-      const service = isAdmin ? adminService : instructorService;
-      const blob = await service.downloadMaterial(courseId, material._id);
+      let blob;
+      if (isAdmin) {
+        blob = await adminService.downloadMaterial(courseId, material._id);
+      } else if (isInstructor) {
+        blob = await instructorService.downloadCourseMaterial(courseId, material._id);
+      } else {
+        // For learners/students
+        blob = await courseService.downloadMaterial(courseId, material._id);
+      }
 
       // Create download link
       const url = window.URL.createObjectURL(blob);

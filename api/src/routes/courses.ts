@@ -17,7 +17,8 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
-  uploadLessonContent
+  uploadLessonContent,
+  downloadCourseMaterial
 } from '../controllers/courseController';
 import { protect, authorize } from '../middleware/auth';
 import { upload, handleMulterError } from '../middleware/upload';
@@ -58,6 +59,7 @@ router.get('/:courseId/modules/:moduleId/lessons', getModuleLessons);
 // Protected routes - All authenticated users
 router.use(protect);
 router.get('/:id/detail', getCourseDetail);
+router.get('/:courseId/materials/:materialId/download', downloadCourseMaterial);
 
 // Protected routes - Instructor and Admin only
 router.use(protect);

@@ -79,6 +79,13 @@ class CourseService {
     const response = await courseAxios.delete(`/courses/${id}`);
     return response.data;
   }
+
+  async downloadMaterial(courseId: string, materialId: string): Promise<Blob> {
+    const response = await courseAxios.get(`/courses/${courseId}/materials/${materialId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
 }
 
 export default new CourseService();

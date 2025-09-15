@@ -998,3 +998,88 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
     next(error);
   }
 };
+
+// @desc    Download course material (for learners)
+// @route   GET /api/courses/:courseId/materials/:materialId/download
+// @access  Private (enrolled users)
+export const downloadCourseMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, materialId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled in the course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if user is enrolled (for students) or is instructor/admin
+    const isInstructor = course.instructorId.toString() === userId.toString();
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    
+    if (!isInstructor && !isAdmin) {
+      // For students, check if they are enrolled
+      const Enrollment = require('../models/Enrollment').default;
+      const enrollment = await Enrollment.findOne({
+        userId: userId,
+        courseId: courseId,
+        status: { $in: ['active', 'completed'] }
+      });
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to download materials'
+        });
+      }
+    }
+
+    // Find the material
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Check if material belongs to the course
+    if (material.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found in this course'
+      });
+    }
+
+    // Check if material is published
+    if (!material.isPublished) {
+      return res.status(403).json({
+        success: false,
+        message: 'Material is not available for download'
+      });
+    }
+
+    if (material.type === 'link') {
+      if (!material.fileUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Link material has no URL'
+        });
+      }
+      return res.redirect(material.fileUrl);
+    }
+
+    // For file downloads, you would implement file serving logic here
+    // This is a placeholder - you'd need to implement actual file serving
+    res.json({
+      success: true,
+      message: 'File download not implemented yet',
+      fileUrl: material.fileUrl
+    });
+  } catch (error) {
+    next(error);
+  }
+};
