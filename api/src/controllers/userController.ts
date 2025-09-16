@@ -455,3 +455,80 @@ export const getUserAnalytics = async (req: AuthRequest, res: Response, next: Ne
     next(error);
   }
 };
+
+// @desc    Get user settings
+// @route   GET /api/users/settings
+// @access  Private
+export const getUserSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    
+    const user = await User.findById(userId).select('preferences');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { settings: user.preferences }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Update user settings
+// @route   PUT /api/users/settings
+// @access  Private
+export const updateUserSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user._id;
+    const { notifications, language, timezone, compactMode, twoFactorAuth, profileVisibility } = req.body;
+
+    const updateData: any = {};
+    
+    if (notifications !== undefined) {
+      updateData['preferences.notifications'] = notifications;
+    }
+    if (language !== undefined) {
+      updateData['preferences.language'] = language;
+    }
+    if (timezone !== undefined) {
+      updateData['preferences.timezone'] = timezone;
+    }
+    if (compactMode !== undefined) {
+      updateData['preferences.compactMode'] = compactMode;
+    }
+    if (twoFactorAuth !== undefined) {
+      updateData['preferences.twoFactorAuth'] = twoFactorAuth;
+    }
+    if (profileVisibility !== undefined) {
+      updateData['preferences.profileVisibility'] = profileVisibility;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('preferences');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { settings: user.preferences },
+      message: 'Settings updated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

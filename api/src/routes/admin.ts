@@ -40,6 +40,7 @@ import {
   sendSystemNotification,
   getNotificationHistory
 } from '../controllers/adminController';
+import { deleteLesson, deleteMaterial, deleteSession } from '../controllers/instructorController';
 
 const router = express.Router();
 
@@ -161,8 +162,11 @@ router.post('/courses/:courseId/assessments', createAssessment);
 router.post('/courses/:courseId/announcements', createAnnouncement);
 router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);
 router.get('/courses/:courseId/materials/:materialId/download', downloadMaterial);
+router.delete('/courses/:courseId/materials/:materialId', deleteMaterial);
 router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 router.get('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download', downloadLessonContent);
+router.delete('/courses/:courseId/modules/:moduleId/lessons/:lessonId', deleteLesson);
+router.delete('/courses/:courseId/sessions/:sessionId', deleteSession);
 
 // System Statistics Routes
 router.get('/stats', getSystemStats);

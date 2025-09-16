@@ -6,7 +6,7 @@ import { Course } from '../models/Course';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { uploadFileLocally, deleteFileLocally } from '../utils/fileUpload';
-import { Material, Recording, Session } from '../models';
+import { Material, Recording, Session, Enrollment } from '../models';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -36,7 +36,7 @@ export const getCourses = async (req: AuthRequest, res: Response, next: NextFunc
         query.instructorId = userId;
       } else {
         // Learners can only see courses they are enrolled in
-        const userEnrollments = await mongoose.model('Enrollment').find({ userId });
+        const userEnrollments = await Enrollment.find({ userId });
         const enrolledCourseIds = userEnrollments.map(e => e.courseId);
         query._id = { $in: enrolledCourseIds };
       }
@@ -840,7 +840,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
     }
 
     // Get user's enrollment and progress
-    const enrollment = await mongoose.model('Enrollment').findOne({ userId, courseId });
+    const enrollment = await Enrollment.findOne({ userId, courseId });
 
     if (!enrollment) {
       return res.status(403).json({
@@ -858,13 +858,36 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       moduleId: { $in: modules.map(m => m._id) } 
     }).sort({ order: 1 });
 
-    // Calculate detailed progress
+    // Calculate detailed progress based on actual completed lessons
     const totalVideos = lessons.filter(l => l.files && l.files.some(f => f.type.startsWith('video/'))).length;
     const totalResources = lessons.filter(l => l.files && l.files.length > 0).length;
     
-    // Mock data for now - in a real app, this would come from user activity tracking
-    const videosCompleted = Math.floor(totalVideos * (enrollment.progress.completionPercentage / 100));
-    const resourcesViewed = Math.floor(totalResources * (enrollment.progress.completionPercentage / 100));
+    // Calculate actual progress based on completed lessons
+    const completedLessons = enrollment.progress.completedLessons || [];
+    const totalLessons = lessons.length;
+    const completedLessonsCount = completedLessons.length;
+    
+    // Calculate completion percentage based on actual completed lessons
+    const actualCompletionPercentage = totalLessons > 0 ? Math.round((completedLessonsCount / totalLessons) * 100) : 0;
+    
+    // Update enrollment progress if it's different from actual progress
+    if (enrollment.progress.completionPercentage !== actualCompletionPercentage) {
+      enrollment.progress.completionPercentage = actualCompletionPercentage;
+      enrollment.progress.lastAccessedAt = new Date();
+      await enrollment.save();
+    }
+    
+    // Calculate videos and resources based on actual progress
+    const videosCompleted = Math.floor(totalVideos * (actualCompletionPercentage / 100));
+    const resourcesViewed = Math.floor(totalResources * (actualCompletionPercentage / 100));
+
+    // Get course statistics for learners
+    const enrollments = await Enrollment.find({ courseId });
+    const totalEnrollments = enrollments.length;
+    const completedEnrollments = enrollments.filter((e: any) => e.progress?.completionPercentage === 100).length;
+    const averageProgress = enrollments.length > 0 
+      ? Math.round(enrollments.reduce((sum: number, e: any) => sum + (e.progress?.completionPercentage || 0), 0) / enrollments.length)
+      : 0;
 
     // Mock syllabus and other data
     const syllabus = [
@@ -956,7 +979,14 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         totalVideos,
         resourcesViewed,
         totalResources,
-        percentage: enrollment.progress.completionPercentage
+        percentage: actualCompletionPercentage
+      },
+      stats: {
+        enrollments: totalEnrollments,
+        completions: completedEnrollments,
+        averageRating: course.stats?.averageRating || 0,
+        totalRatings: course.stats?.totalRatings || 0,
+        averageProgress: averageProgress
       },
       lastAccessed: enrollment.progress.completionPercentage > 0 ? {
         type: 'resource' as const,
@@ -1022,7 +1052,6 @@ export const downloadCourseMaterial = async (req: AuthRequest, res: Response, ne
     
     if (!isInstructor && !isAdmin) {
       // For students, check if they are enrolled
-      const Enrollment = require('../models/Enrollment').default;
       const enrollment = await Enrollment.findOne({
         userId: userId,
         courseId: courseId,
@@ -1107,7 +1136,6 @@ export const downloadLessonContent = async (req: AuthRequest, res: Response, nex
     
     if (!isInstructor && !isAdmin) {
       // For students, check if they are enrolled
-      const Enrollment = require('../models/Enrollment').default;
       const enrollment = await Enrollment.findOne({
         userId: userId,
         courseId: courseId,
@@ -1170,6 +1198,86 @@ export const downloadLessonContent = async (req: AuthRequest, res: Response, nex
       data: {
         downloadUrl: file.url,
         fileName: file.name
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Mark lesson as completed
+// @route   POST /api/courses/:courseId/lessons/:lessonId/complete
+// @access  Private (enrolled users)
+export const markLessonComplete = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled in the course
+    const enrollment = await Enrollment.findOne({ userId, courseId });
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not enrolled in this course'
+      });
+    }
+
+    // Check if lesson exists and belongs to the course
+    const lesson = await Lesson.findById(lessonId);
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Check if lesson belongs to a module in this course
+    const module = await Module.findById(lesson.moduleId);
+    if (!module || module.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson does not belong to this course'
+      });
+    }
+
+    // Add lesson to completed lessons if not already completed
+    if (!enrollment.progress.completedLessons.includes(lessonId as any)) {
+      enrollment.progress.completedLessons.push(lessonId as any);
+      enrollment.progress.lastAccessedAt = new Date();
+      
+      // Calculate new completion percentage
+      const totalLessons = await Lesson.countDocuments({ 
+        moduleId: { $in: await Module.find({ courseId }).distinct('_id') } 
+      });
+      const completedCount = enrollment.progress.completedLessons.length;
+      enrollment.progress.completionPercentage = totalLessons > 0 ? 
+        Math.round((completedCount / totalLessons) * 100) : 0;
+
+      await enrollment.save();
+
+      // Log activity
+      const Activity = require('../models/Activity').default;
+      await Activity.create({
+        userId,
+        type: 'lesson_view',
+        title: 'Lesson Completed',
+        description: `Completed lesson: ${lesson.title}`,
+        metadata: {
+          courseId,
+          lessonId,
+          actionDetails: {
+            completionPercentage: enrollment.progress.completionPercentage
+          }
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Lesson marked as completed',
+      data: {
+        completionPercentage: enrollment.progress.completionPercentage,
+        completedLessons: enrollment.progress.completedLessons.length
       }
     });
   } catch (error) {

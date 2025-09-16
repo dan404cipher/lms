@@ -8,6 +8,7 @@ import { Enrollment } from '../models/Enrollment';
 import { Session } from '../models/Session';
 import { Material } from '../models/Material';
 import { Assessment } from '../models/Assessment';
+import SystemSettings from '../models/SystemSettings';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { Announcement } from '../models/Announcement';
@@ -823,15 +824,24 @@ export const generateReport = async (req: AuthRequest, res: Response, next: Next
 // @access  Private (Admin)
 export const getSystemSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // Mock system settings
-    const settings = {
-      siteName: 'LMS Platform',
-      maintenanceMode: false,
-      registrationEnabled: true,
-      maxFileSize: 100 * 1024 * 1024, // 100MB
-      allowedFileTypes: ['pdf', 'doc', 'docx', 'mp4', 'jpg', 'png'],
-      emailNotifications: true
-    };
+    let settings = await SystemSettings.findOne();
+    
+    // If no settings exist, create default settings
+    if (!settings) {
+      settings = new SystemSettings({
+        siteName: 'LMS Platform',
+        maintenanceMode: false,
+        registrationEnabled: true,
+        maxFileSize: 100, // 100MB
+        allowedFileTypes: ['pdf', 'doc', 'docx', 'mp4', 'jpg', 'png'],
+        emailNotifications: true,
+        maxUsers: 1000,
+        maxCourses: 500,
+        sessionTimeout: 30,
+        backupFrequency: 'daily'
+      });
+      await settings.save();
+    }
 
     res.json({
       success: true,
@@ -847,8 +857,20 @@ export const getSystemSettings = async (req: AuthRequest, res: Response, next: N
 // @access  Private (Admin)
 export const updateSystemSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    // Mock settings update
-    const settings = req.body;
+    const updateData = req.body;
+    
+    // Find existing settings or create new ones
+    let settings = await SystemSettings.findOne();
+    
+    if (settings) {
+      // Update existing settings
+      Object.assign(settings, updateData);
+      await settings.save();
+    } else {
+      // Create new settings
+      settings = new SystemSettings(updateData);
+      await settings.save();
+    }
 
     res.json({
       success: true,

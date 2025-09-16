@@ -107,7 +107,10 @@ const userSchema = new Schema<IUser>({
       inApp: { type: Boolean, default: true }
     },
     language: { type: String, default: 'en' },
-    timezone: { type: String, default: 'UTC' }
+    timezone: { type: String, default: 'UTC' },
+    compactMode: { type: Boolean, default: false },
+    twoFactorAuth: { type: Boolean, default: false },
+    profileVisibility: { type: Boolean, default: true }
   }
 }, {
   timestamps: true

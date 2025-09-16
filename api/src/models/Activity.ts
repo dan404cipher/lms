@@ -107,6 +107,9 @@ activitySchema.index({ type: 1, createdAt: -1 });
 activitySchema.index({ 'metadata.courseId': 1, createdAt: -1 });
 activitySchema.index({ createdAt: -1 });
 
+// Text indexes for search functionality
+activitySchema.index({ title: 'text', description: 'text', type: 'text' });
+
 // Virtual for formatted date
 activitySchema.virtual('formattedDate').get(function() {
   return this.createdAt.toLocaleDateString('en-GB', {

@@ -51,6 +51,7 @@ class ActivityService {
     courseId?: string;
     startDate?: string;
     endDate?: string;
+    search?: string;
   }) {
     const response = await activityAxios.get('/activities/my-activities', { params });
     return response.data;
@@ -71,6 +72,7 @@ class ActivityService {
     endDate?: string;
     type?: string;
     courseId?: string;
+    search?: string;
   }) {
     const response = await activityAxios.get('/activities/export', { params });
     return response.data;

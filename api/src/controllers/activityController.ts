@@ -9,7 +9,7 @@ import { AuthRequest } from '../middleware/auth';
 // @access  Private
 export const getMyActivities = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { page = 1, limit = 20, type, courseId, startDate, endDate } = req.query;
+    const { page = 1, limit = 20, type, courseId, startDate, endDate, search } = req.query;
     const userId = req.user._id;
     const userRole = req.user.role;
 
@@ -45,10 +45,35 @@ export const getMyActivities = async (req: AuthRequest, res: Response, next: Nex
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate as string);
+        // Set start date to beginning of day (00:00:00)
+        const start = new Date(startDate as string);
+        start.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate as string);
+        // Set end date to end of day (23:59:59.999)
+        const end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    // Apply search filter
+    if (search && search.toString().trim() !== '') {
+      const searchTerm = search.toString().trim();
+      const searchQuery = {
+        $or: [
+          { title: { $regex: searchTerm, $options: 'i' } },
+          { description: { $regex: searchTerm, $options: 'i' } },
+          { type: { $regex: searchTerm, $options: 'i' } }
+        ]
+      };
+
+      // If there's already an $or condition (for instructors), combine them with $and
+      if (query.$or) {
+        query = { $and: [query, searchQuery] };
+      } else {
+        query = { ...query, ...searchQuery };
       }
     }
 
@@ -267,7 +292,7 @@ export const getActivityTypes = async (req: AuthRequest, res: Response, next: Ne
 // @access  Private (Admin only)
 export const exportActivities = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { startDate, endDate, type, courseId } = req.query;
+    const { startDate, endDate, type, courseId, search } = req.query;
 
     // Check if user is admin
     if (!['admin', 'super_admin'].includes(req.user.role)) {
@@ -292,11 +317,27 @@ export const exportActivities = async (req: AuthRequest, res: Response, next: Ne
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) {
-        query.createdAt.$gte = new Date(startDate as string);
+        // Set start date to beginning of day (00:00:00)
+        const start = new Date(startDate as string);
+        start.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
       }
       if (endDate) {
-        query.createdAt.$lte = new Date(endDate as string);
+        // Set end date to end of day (23:59:59.999)
+        const end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
       }
+    }
+
+    // Apply search filter
+    if (search && search.toString().trim() !== '') {
+      const searchTerm = search.toString().trim();
+      query.$or = [
+        { title: { $regex: searchTerm, $options: 'i' } },
+        { description: { $regex: searchTerm, $options: 'i' } },
+        { type: { $regex: searchTerm, $options: 'i' } }
+      ];
     }
 
     // Get activities with populated data

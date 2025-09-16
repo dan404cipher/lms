@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import sessionService, { Session, Recording } from "@/services/sessionService";
+import ConfirmationModal from "@/components/ConfirmationModal";
 import {
   Video,
   Calendar,
@@ -26,9 +27,10 @@ interface SessionsAndRecordingsProps {
   courseId: string;
   isInstructor: boolean;
   isAdmin?: boolean;
+  onSessionDeleted?: (sessionId: string) => void;
 }
 
-const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: SessionsAndRecordingsProps) => {
+const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSessionDeleted }: SessionsAndRecordingsProps) => {
   const { toast } = useToast();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [recordings, setRecordings] = useState<Recording[]>([]);
@@ -36,6 +38,9 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
   const [activeTab, setActiveTab] = useState("sessions");
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  const [showDeleteSessionModal, setShowDeleteSessionModal] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -245,15 +250,25 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
     }
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm("Are you sure you want to delete this session?")) return;
+  const handleDeleteSession = (sessionId: string) => {
+    setSessionToDelete(sessionId);
+    setShowDeleteSessionModal(true);
+  };
 
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+
+    setIsDeletingSession(true);
     try {
-      await sessionService.deleteSession(sessionId);
+      await sessionService.deleteSession(sessionToDelete);
       toast({
         title: "Success",
         description: "Session deleted successfully."
       });
+      // Call the parent callback if provided
+      if (onSessionDeleted) {
+        onSessionDeleted(sessionToDelete);
+      }
       await loadData(); // Refresh sessions list
     } catch (error) {
       console.error('Error deleting session:', error);
@@ -262,6 +277,10 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
         description: "Failed to delete session. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsDeletingSession(false);
+      setShowDeleteSessionModal(false);
+      setSessionToDelete(null);
     }
   };
 
@@ -406,12 +425,25 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
                                 size="sm"
                                 variant="outline"
                                 onClick={() => handleJoinSession(session._id)}
+                                disabled={status !== 'live' && status !== 'upcoming'}
                               >
                                 <ExternalLink className="h-4 w-4 mr-2" />
-                                Join
+                                {status === 'live' ? 'Join Live' : 'Join'}
                               </Button>
                             )}
                           </>
+                        )}
+
+                        {/* Show recording button for all users */}
+                        {session.hasRecording && (
+                          <Button   
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleWatchRecording(session._id)}
+                          >
+                            <Play className="h-4 w-4 mr-2" />
+                            Watch Recording
+                          </Button>
                         )}
 
                         {(isInstructor || isAdmin) && (
@@ -435,17 +467,6 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
                               >
                                 <Upload className="h-4 w-4 mr-2" />
                                 Upload Recording
-                              </Button>
-                            )}
-                            
-                            {session.hasRecording && (
-                              <Button   
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleWatchRecording(session._id)}
-                              >
-                                <Play className="h-4 w-4 mr-2" />
-                                Watch Recording
                               </Button>
                             )}
                             
@@ -536,6 +557,22 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false }: Sess
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Session Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteSessionModal}
+        onClose={() => {
+          setShowDeleteSessionModal(false);
+          setSessionToDelete(null);
+        }}
+        onConfirm={confirmDeleteSession}
+        title="Delete Session"
+        description="Are you sure you want to delete this session? This action cannot be undone."
+        confirmText="Delete Session"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={isDeletingSession}
+      />
     </div>
   );
 };

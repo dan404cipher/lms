@@ -93,6 +93,11 @@ class CourseService {
     });
     return response.data;
   }
+
+  async markLessonComplete(courseId: string, lessonId: string) {
+    const response = await courseAxios.post(`/courses/${courseId}/lessons/${lessonId}/complete`);
+    return response.data;
+  }
 }
 
 export default new CourseService();

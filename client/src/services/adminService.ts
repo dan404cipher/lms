@@ -390,6 +390,22 @@ class AdminService {
     return response.data;
   }
 
+  // Delete methods
+  async deleteMaterial(courseId: string, materialId: string): Promise<AdminResponse<void>> {
+    const response = await adminAxios.delete(`/admin/courses/${courseId}/materials/${materialId}`);
+    return response.data;
+  }
+
+  async deleteLesson(courseId: string, moduleId: string, lessonId: string): Promise<AdminResponse<void>> {
+    const response = await adminAxios.delete(`/admin/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}`);
+    return response.data;
+  }
+
+  async deleteSession(courseId: string, sessionId: string): Promise<AdminResponse<void>> {
+    const response = await adminAxios.delete(`/admin/courses/${courseId}/sessions/${sessionId}`);
+    return response.data;
+  }
+
   // System Statistics
   async getSystemStats(): Promise<AdminResponse<SystemStats>> {
     const response = await adminAxios.get('/admin/stats');

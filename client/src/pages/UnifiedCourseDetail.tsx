@@ -44,6 +44,7 @@ import instructorService from "@/services/instructorService";
 import adminService, { Course } from "@/services/adminService";
 import ScheduleSessionModal from "@/components/ScheduleSessionModal";
 import SessionsAndRecordings from "@/components/SessionsAndRecordings";
+import ConfirmationModal from "@/components/ConfirmationModal";
 
 interface CourseResource {
   _id: string;
@@ -237,6 +238,10 @@ const UnifiedCourseDetail = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null);
+  const [deleteMaterialId, setDeleteMaterialId] = useState<string | null>(null);
+  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
+  const [showDeleteCourseModal, setShowDeleteCourseModal] = useState(false);
+  const [isDeletingCourse, setIsDeletingCourse] = useState(false);
 
   // Course settings state
   const [courseSettings, setCourseSettings] = useState({
@@ -721,6 +726,26 @@ const UnifiedCourseDetail = () => {
     console.log('Viewing video:', video);
   };
 
+  const handleLessonClick = async (lessonId: string) => {
+    if (!courseId) return;
+    
+    try {
+      // Mark lesson as completed
+      await courseService.markLessonComplete(courseId, lessonId);
+      
+      // Refresh course data to update progress
+      await fetchCourseDetail();
+      
+      toast({
+        title: "Success",
+        description: "Lesson marked as completed!",
+      });
+    } catch (error) {
+      console.error('Error marking lesson as complete:', error);
+      // Don't show error toast for this, as it's not critical
+    }
+  };
+
   const handleUploadMaterial = () => {
     if (!courseId) return;
 
@@ -984,7 +1009,8 @@ const UnifiedCourseDetail = () => {
     }
 
     try {
-      await instructorService.deleteLesson(courseId, module._id, deleteLessonId);
+      const service = isAdmin ? adminService : instructorService;
+      await service.deleteLesson(courseId, module._id, deleteLessonId);
       
       // Update the local state to remove the lesson
       setCourse(prevCourse => {
@@ -1012,6 +1038,119 @@ const UnifiedCourseDetail = () => {
       });
     } finally {
       setDeleteLessonId(null);
+    }
+  };
+
+  const handleDeleteMaterial = (materialId: string) => {
+    setDeleteMaterialId(materialId);
+  };
+
+  const confirmDeleteMaterial = async () => {
+    if (!courseId || !deleteMaterialId) {
+      toast({
+        title: "Error",
+        description: "Course ID or Material ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const service = isAdmin ? adminService : instructorService;
+      await service.deleteMaterial(courseId, deleteMaterialId);
+      
+      // Update the local state to remove the material
+      setCourse(prevCourse => {
+        if (!prevCourse) return null;
+        return {
+          ...prevCourse,
+          materials: prevCourse.materials?.filter(m => m._id !== deleteMaterialId)
+        };
+      });
+
+      toast({
+        title: "Success",
+        description: "Material deleted successfully",
+      });
+    } catch (error: any) {
+      console.error('Error deleting material:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete material",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteMaterialId(null);
+    }
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    setDeleteSessionId(sessionId);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!courseId || !deleteSessionId) {
+      toast({
+        title: "Error",
+        description: "Course ID or Session ID not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const service = isAdmin ? adminService : instructorService;
+      await service.deleteSession(courseId, deleteSessionId);
+      
+      // Update the local state to remove the session
+      setCourse(prevCourse => {
+        if (!prevCourse) return null;
+        return {
+          ...prevCourse,
+          sessions: prevCourse.sessions?.filter(s => s._id !== deleteSessionId)
+        };
+      });
+
+      toast({
+        title: "Success",
+        description: "Session deleted successfully",
+      });
+    } catch (error: any) {
+      console.error('Error deleting session:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to delete session",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteSessionId(null);
+    }
+  };
+
+  const handleDeleteCourse = () => {
+    setShowDeleteCourseModal(true);
+  };
+
+  const confirmDeleteCourse = async () => {
+    if (!courseId) return;
+
+    setIsDeletingCourse(true);
+    try {
+      await adminService.deleteCourse(courseId);
+      toast({
+        title: "Success",
+        description: "Course deleted successfully.",
+      });
+      navigate('/courses');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete course.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingCourse(false);
+      setShowDeleteCourseModal(false);
     }
   };
 
@@ -1327,7 +1466,15 @@ const UnifiedCourseDetail = () => {
                             <div
                               key={lesson._id}
                               className="flex items-center justify-between p-2 border rounded bg-background hover:bg-muted/50 transition-colors cursor-pointer"
-                              onClick={() => navigate(`/courses/${courseId}/lessons/${lesson._id}`)}
+                              onClick={() => {
+                                // For learners, mark lesson as complete when clicked
+                                if (!isInstructor && !isAdmin) {
+                                  handleLessonClick(lesson._id);
+                                } else {
+                                  // For instructors/admins, navigate to lesson detail
+                                  navigate(`/courses/${courseId}/lessons/${lesson._id}`);
+                                }
+                              }}
                             >
                               <div className="flex items-center space-x-2">
                                 <FileText className="h-4 w-4 text-green-600" />
@@ -1473,6 +1620,16 @@ const UnifiedCourseDetail = () => {
                         <Button size="sm" variant="outline" onClick={() => handleDownloadMaterial(material)}>
                           <Download className="h-4 w-4" />
                         </Button>
+                        {(isAdmin || isInstructor) && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => handleDeleteMaterial(material._id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1489,91 +1646,13 @@ const UnifiedCourseDetail = () => {
 
         {/* Sessions Tab - All Users */}
         <TabsContent value="sessions" className="space-y-6">
-          {/* Show SessionsAndRecordings for instructors and admins */}
-          {(isInstructor || isAdmin) ? (
-            <SessionsAndRecordings courseId={courseId!} isInstructor={isInstructor} isAdmin={isAdmin} />
-          ) : (
-            /* Show basic session display for learners */
-            <>
-              {course.sessions && Array.isArray(course.sessions) && course.sessions.length > 0 ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Calendar className="h-5 w-5" />
-                      <span>Sessions</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {course.sessions.map((session) => (
-                        <div key={session._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
-                          <div className="flex items-center space-x-3">
-                            <Calendar className="h-4 w-4 text-blue-600" />
-                            <div>
-                              <h4 className="font-medium">{session.title}</h4>
-                              <p className="text-sm text-muted-foreground">{session.description}</p>
-                              <div className="flex items-center space-x-2 mt-1">
-                                <Clock className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(session.scheduledAt).toLocaleString()}
-                                </span>
-                                <Badge variant="outline" className="text-xs">
-                                  {session.duration} min
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Badge
-                              variant={
-                                session.status === 'completed' ? 'default' :
-                                  session.status === 'live' ? 'destructive' :
-                                    session.status === 'cancelled' ? 'secondary' :
-                                      'outline'
-                              }
-                            >
-                              {session.status}
-                            </Badge>
-                            <Badge variant="outline" className="capitalize">
-                              {session.type.replace('-', ' ')}
-                            </Badge>
-                            <div>
-                              {session?.hasRecording && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleViewRecording(session as any)}
-                                >
-                                  <Play className="h-4 w-4 mr-2" />
-                                  Watch Recording
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                          
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Calendar className="h-5 w-5" />
-                      <span>Sessions</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-center py-6">
-                      <Calendar className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">No sessions scheduled</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
+          {/* Show SessionsAndRecordings for all users */}
+          <SessionsAndRecordings 
+            courseId={courseId!} 
+            isInstructor={isInstructor} 
+            isAdmin={isAdmin}
+            onSessionDeleted={handleDeleteSession}
+          />
         </TabsContent>
 
         {selectedRecording && (
@@ -2218,24 +2297,7 @@ const UnifiedCourseDetail = () => {
                         </div>
                         <Button
                           variant="destructive"
-                          onClick={async () => {
-                            if (confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
-                              try {
-                                await adminService.deleteCourse(courseId!);
-                                toast({
-                                  title: "Success",
-                                  description: "Course deleted successfully.",
-                                });
-                                navigate('/courses');
-                              } catch (error) {
-                                toast({
-                                  title: "Error",
-                                  description: "Failed to delete course.",
-                                  variant: "destructive",
-                                });
-                              }
-                            }
-                          }}
+                          onClick={handleDeleteCourse}
                         >
                           Delete Course
                         </Button>
@@ -2769,6 +2831,55 @@ const UnifiedCourseDetail = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete Material Confirmation Dialog */}
+      <AlertDialog open={!!deleteMaterialId} onOpenChange={(open) => !open && setDeleteMaterialId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Material</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this material? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteMaterial} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Session Confirmation Dialog */}
+      <AlertDialog open={!!deleteSessionId} onOpenChange={(open) => !open && setDeleteSessionId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this session? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteSession} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Course Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteCourseModal}
+        onClose={() => setShowDeleteCourseModal(false)}
+        onConfirm={confirmDeleteCourse}
+        title="Delete Course"
+        description="Are you sure you want to delete this course? This action cannot be undone and will permanently remove all course content, materials, sessions, and student data."
+        confirmText="Delete Course"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={isDeletingCourse}
+      />
 
     </div>
   );

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import ConfirmationModal from "@/components/ConfirmationModal";
 import { 
   Plus, 
   Search, 
@@ -66,6 +67,9 @@ const InstructorMaterials = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -231,11 +235,17 @@ const InstructorMaterials = () => {
     }
   };
 
-  const handleDeleteMaterial = async (materialId: string) => {
-    if (!confirm("Are you sure you want to delete this material?")) return;
+  const handleDeleteMaterial = (materialId: string) => {
+    setMaterialToDelete(materialId);
+    setShowDeleteModal(true);
+  };
 
+  const confirmDeleteMaterial = async () => {
+    if (!materialToDelete) return;
+
+    setIsDeleting(true);
     try {
-      await instructorService.deleteMaterial(materialId);
+      await instructorService.deleteMaterial(materialToDelete);
       toast({
         title: "Success",
         description: "Material deleted successfully",
@@ -248,6 +258,10 @@ const InstructorMaterials = () => {
         description: error.response?.data?.message || "Failed to delete material",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setMaterialToDelete(null);
     }
   };
 
@@ -610,6 +624,22 @@ const InstructorMaterials = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Material Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setMaterialToDelete(null);
+        }}
+        onConfirm={confirmDeleteMaterial}
+        title="Delete Material"
+        description="Are you sure you want to delete this material? This action cannot be undone."
+        confirmText="Delete Material"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

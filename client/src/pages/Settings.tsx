@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Bell, Moon, Globe, Shield, Palette, Settings as SettingsIcon, Database, Users, Mail, Server } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import adminService from "@/services/adminService";
+import userSettingsService from "@/services/userSettingsService";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ const Settings = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   
   // User settings state
   const [userSettings, setUserSettings] = useState({
@@ -32,6 +34,9 @@ const Settings = () => {
     twoFactorAuth: false,
     profileVisibility: true
   });
+
+  // Original settings for comparison
+  const [originalUserSettings, setOriginalUserSettings] = useState(userSettings);
   
   // Admin system settings state
   const [systemSettings, setSystemSettings] = useState({
@@ -46,6 +51,9 @@ const Settings = () => {
     sessionTimeout: 30,
     backupFrequency: 'daily'
   });
+
+  // Original system settings for comparison
+  const [originalSystemSettings, setOriginalSystemSettings] = useState(systemSettings);
   
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
@@ -54,10 +62,21 @@ const Settings = () => {
     const loadSettings = async () => {
       setLoading(true);
       try {
+        // Load user settings
+        const userResponse = await userSettingsService.getUserSettings();
+        if (userResponse.success) {
+          const loadedUserSettings = userResponse.data.settings;
+          setUserSettings(loadedUserSettings);
+          setOriginalUserSettings(loadedUserSettings);
+        }
+
+        // Load system settings if admin
         if (isAdmin) {
-          const response = await adminService.getSystemSettings();
-          if (response.success) {
-            setSystemSettings(prev => ({ ...prev, ...response.data.settings }));
+          const systemResponse = await userSettingsService.getSystemSettings();
+          if (systemResponse.success) {
+            const loadedSystemSettings = systemResponse.data.settings;
+            setSystemSettings(loadedSystemSettings);
+            setOriginalSystemSettings(loadedSystemSettings);
           }
         }
       } catch (error) {
@@ -75,16 +94,31 @@ const Settings = () => {
     loadSettings();
   }, [isAdmin, toast]);
 
+  // Check for changes
+  useEffect(() => {
+    const userChanged = JSON.stringify(userSettings) !== JSON.stringify(originalUserSettings);
+    const systemChanged = isAdmin && JSON.stringify(systemSettings) !== JSON.stringify(originalSystemSettings);
+    setHasChanges(userChanged || systemChanged);
+  }, [userSettings, systemSettings, originalUserSettings, originalSystemSettings, isAdmin]);
+
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
+      // Save user settings
+      await userSettingsService.updateUserSettings(userSettings);
+      setOriginalUserSettings(userSettings);
+
+      // Save system settings if admin
       if (isAdmin) {
-        await adminService.updateSystemSettings(systemSettings);
-        toast({
-          title: "Success",
-          description: "System settings updated successfully"
-        });
+        await userSettingsService.updateSystemSettings(systemSettings);
+        setOriginalSystemSettings(systemSettings);
       }
+
+      setHasChanges(false);
+      toast({
+        title: "Success",
+        description: "Settings updated successfully"
+      });
     } catch (error) {
       console.error('Error saving settings:', error);
       toast({
@@ -95,6 +129,14 @@ const Settings = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCancelChanges = () => {
+    setUserSettings(originalUserSettings);
+    if (isAdmin) {
+      setSystemSettings(originalSystemSettings);
+    }
+    setHasChanges(false);
   };
 
   if (!user) {
@@ -110,7 +152,15 @@ const Settings = () => {
   return (
     <div className="container mx-auto py-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Settings</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">Settings</h1>
+          {hasChanges && (
+            <div className="flex items-center space-x-2 text-amber-600">
+              <div className="w-2 h-2 bg-amber-600 rounded-full"></div>
+              <span className="text-sm font-medium">Unsaved changes</span>
+            </div>
+          )}
+        </div>
         
         <div className="space-y-6">
           {/* Notifications */}
@@ -474,10 +524,17 @@ const Settings = () => {
 
           {/* Actions */}
           <div className="flex justify-end space-x-4">
-            <Button variant="outline" disabled={saving}>
+            <Button 
+              variant="outline" 
+              onClick={handleCancelChanges}
+              disabled={saving || loading || !hasChanges}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveSettings} disabled={saving || loading}>
+            <Button 
+              onClick={handleSaveSettings} 
+              disabled={saving || loading || !hasChanges}
+            >
               {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>

@@ -1645,9 +1645,17 @@ export const getSessions = async (req: AuthRequest, res: Response, next: NextFun
 
     // Filter by date range
     if (req.query.startDate && req.query.endDate) {
+      // Set start date to beginning of day (00:00:00)
+      const start = new Date(req.query.startDate as string);
+      start.setHours(0, 0, 0, 0);
+      
+      // Set end date to end of day (23:59:59.999)
+      const end = new Date(req.query.endDate as string);
+      end.setHours(23, 59, 59, 999);
+      
       query.scheduledAt = {
-        $gte: new Date(req.query.startDate as string),
-        $lte: new Date(req.query.endDate as string)
+        $gte: start,
+        $lte: end
       };
     }
 

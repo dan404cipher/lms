@@ -10,7 +10,9 @@ import {
   getUserCourses,
   getEnrolledCourses,
   getUserAnalytics,
-  searchUsers
+  searchUsers,
+  getUserSettings,
+  updateUserSettings
 } from '../controllers/userController';
 import { protect, authorize } from '../middleware/auth';
 
@@ -57,6 +59,8 @@ router.get('/courses', getUserCourses);
 router.get('/enrolled-courses', getEnrolledCourses);
 router.get('/analytics', getUserAnalytics);
 router.get('/search', searchUsers);
+router.get('/settings', getUserSettings);
+router.put('/settings', updateUserSettings);
 
 // Admin only routes
 router.use(authorize('admin', 'super_admin'));

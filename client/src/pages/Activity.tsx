@@ -107,31 +107,28 @@ const Activity = () => {
   const [totalActivities, setTotalActivities] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
-  const [selectedCourse, setSelectedCourse] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isFiltering, setIsFiltering] = useState(false);
+  const [availableCourses, setAvailableCourses] = useState<{id: string, title: string, courseCode: string}[]>([]);
 
   // Debounced search effect
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchTerm !== "") {
-        setCurrentPage(1);
-        fetchActivities();
-      }
+      setCurrentPage(1);
+      setIsFiltering(true);
+      fetchActivities();
     }, 500);
 
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
-  // Main fetch effect for filters and pagination
-  // useEffect(() => {
-  //   fetchActivities();
-  // }, [currentPage, selectedType, selectedCourse, startDate, endDate]);
-
+  // Main fetch effect for filters and pagination (excluding search which has its own debounced effect)
   useEffect(() => {
+    setIsFiltering(true);
     fetchActivities();
-  }, [currentPage]);
+  }, [currentPage, selectedType, selectedCourse, startDate, endDate]);
 
   const fetchActivities = async () => {
     try {
@@ -149,7 +146,7 @@ const Activity = () => {
         filterParams.type = selectedType;
       }
 
-      if (selectedCourse && selectedCourse !== "") {
+      if (selectedCourse && selectedCourse !== "all") {
         filterParams.courseId = selectedCourse;
       }
 
@@ -176,9 +173,19 @@ const Activity = () => {
       console.log('Activities response:', activitiesResponse);
 
       if (activitiesResponse?.data) {
-        setActivities(activitiesResponse.data.activities || []);
+        const activitiesData = activitiesResponse.data.activities || [];
+        setActivities(activitiesData);
         setTotalPages(activitiesResponse.data.pagination?.pages || 1);
         setTotalActivities(activitiesResponse.data.pagination?.total || 0);
+        
+        // Extract unique courses from activities
+        const courses = activitiesData
+          .filter(activity => activity.course)
+          .map(activity => activity.course)
+          .filter((course, index, self) => 
+            index === self.findIndex(c => c?.id === course?.id)
+          );
+        setAvailableCourses(courses);
       }
 
       if (typesResponse?.data?.types && typesResponse.data.types.length > 0) {
@@ -194,20 +201,13 @@ const Activity = () => {
     }
   };
 
-  const handleApplyFilters = () => {
-    setCurrentPage(1);
-    setIsFiltering(true);
-    fetchActivities();
-  };
-
   const handleClearFilters = () => {
     setSearchTerm("");
     setSelectedType("all");
-    setSelectedCourse("");
+    setSelectedCourse("all");
     setStartDate("");
     setEndDate("");
     setCurrentPage(1);
-    // setIsFiltering(true);
     // Fetch activities will be triggered by useEffect
   };
 
@@ -227,7 +227,7 @@ const Activity = () => {
         exportParams.type = selectedType;
       }
 
-      if (selectedCourse && selectedCourse !== "") {
+      if (selectedCourse && selectedCourse !== "all") {
         exportParams.courseId = selectedCourse;
       }
 
@@ -389,12 +389,12 @@ const Activity = () => {
             <CardTitle className="flex items-center space-x-2">
               <Filter className="h-5 w-5" />
               <span>Filters</span>
-              {isFiltering && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>}
+              {(isFiltering || loading) && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4  items-center justify-end">
-              {/*  <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+              <div>
                 <Label htmlFor="search">Search</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -406,7 +406,7 @@ const Activity = () => {
                     className="pl-10"
                   />
                 </div>
-              </div> */}
+              </div>
               <div>
                 <Label htmlFor="type">Activity Type</Label>
                 <Select value={selectedType} onValueChange={setSelectedType}>
@@ -437,6 +437,22 @@ const Activity = () => {
                 </Select>
               </div>
               <div>
+                <Label htmlFor="course">Course</Label>
+                <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All courses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All courses</SelectItem>
+                    {availableCourses.map((course) => (
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.courseCode} - {course.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="startDate">Start Date</Label>
                 <Input
                   id="startDate"
@@ -458,13 +474,6 @@ const Activity = () => {
               </div>
             </div>
             <div className="flex items-center space-x-2 mt-4">
-              <Button
-                onClick={handleApplyFilters}
-                size="sm"
-                disabled={isFiltering}
-              >
-                {isFiltering ? 'Applying...' : 'Apply Filters'}
-              </Button>
               <Button
                 onClick={handleClearFilters}
                 variant="outline"
@@ -536,7 +545,7 @@ const Activity = () => {
             <div className="text-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">
-                {searchTerm || selectedType !== "all" || selectedCourse || startDate || endDate
+                {searchTerm || selectedType !== "all" || selectedCourse !== "all" || startDate || endDate
                   ? "No activities found with the current filters."
                   : "No activities found."
                 }
