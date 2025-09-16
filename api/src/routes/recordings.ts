@@ -81,7 +81,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 2 * 1024 * 1024 * 1024 // 2GB limit for recordings
+    fileSize: 0 // No file size limit for recordings
   }
 });
 
@@ -105,7 +105,7 @@ router.post('/upload/:sessionId',
       if (error.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({
           success: false,
-          message: 'File too large. Maximum file size is 2GB. Please upload a smaller file.'
+          message: 'File too large. Please check your server configuration and try again.'
         });
       }
       return res.status(400).json({

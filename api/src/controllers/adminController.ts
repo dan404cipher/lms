@@ -832,7 +832,7 @@ export const getSystemSettings = async (req: AuthRequest, res: Response, next: N
         siteName: 'LMS Platform',
         maintenanceMode: false,
         registrationEnabled: true,
-        maxFileSize: 100, // 100MB
+        maxFileSize: 0, // No limit
         allowedFileTypes: ['pdf', 'doc', 'docx', 'mp4', 'jpg', 'png'],
         emailNotifications: true,
         maxUsers: 1000,

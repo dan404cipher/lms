@@ -325,23 +325,23 @@ const instructorService = {
     return response.data;
   },
 
-  // Assessment Management
-  async getAssessments() {
+  // General Assessment Management
+  async getAllAssessments() {
     const response = await instructorAxios.get('/instructor/assessments');
     return response.data;
   },
 
-  async createAssessment(assessmentData: any) {
+  async createGeneralAssessment(assessmentData: any) {
     const response = await instructorAxios.post('/instructor/assessments', assessmentData);
     return response.data;
   },
 
-  async updateAssessment(assessmentId: string, assessmentData: any) {
+  async updateGeneralAssessment(assessmentId: string, assessmentData: any) {
     const response = await instructorAxios.put(`/instructor/assessments/${assessmentId}`, assessmentData);
     return response.data;
   },
 
-  async deleteAssessment(assessmentId: string) {
+  async deleteGeneralAssessment(assessmentId: string) {
     const response = await instructorAxios.delete(`/instructor/assessments/${assessmentId}`);
     return response.data;
   },

@@ -31,7 +31,7 @@ export const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || '1073741824'), // 1GB default
+    fileSize: 0, // No file size limit
     files: 1 // Only allow 1 file at a time
   }
 });
@@ -41,7 +41,7 @@ export const uploadMultiple = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE || '1073741824'), // 1GB default
+    fileSize: 0, // No file size limit
     files: 5 // Allow up to 5 files
   }
 });
@@ -58,7 +58,7 @@ export const imageUpload = multer({
     }
   },
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB for images
+    fileSize: 0, // No file size limit
     files: 1
   }
 });
@@ -74,7 +74,7 @@ export const videoUpload = multer({
     }
   },
   limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2GB for videos
+    fileSize: 0, // No file size limit
     files: 1
   }
 });
@@ -90,7 +90,7 @@ export const documentUpload = multer({
     }
   },
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB for documents
+    fileSize: 0, // No file size limit
     files: 1
   }
 });
@@ -101,7 +101,7 @@ export const handleMulterError = (error: any, req: any, res: any, next: any) => 
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum file size is 2GB. Please upload a smaller file.'
+        message: 'File too large. Please check your server configuration and try again.'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {

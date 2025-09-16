@@ -31,9 +31,8 @@ const systemSettingsSchema = new Schema<ISystemSettings>({
   },
   maxFileSize: {
     type: Number,
-    default: 100, // 100MB
-    min: 1,
-    max: 1000
+    default: 0, // No limit (0 means unlimited)
+    min: 0
   },
   allowedFileTypes: [{
     type: String,

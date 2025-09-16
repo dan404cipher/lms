@@ -84,7 +84,7 @@ const InstructorAssessments = () => {
   const fetchAssessments = async () => {
     try {
       setLoading(true);
-      const response = await instructorService.getAssessments();
+      const response = await instructorService.getAllAssessments();
       setAssessments(response.data.assessments || []);
     } catch (error) {
       console.error('Error fetching assessments:', error);
@@ -149,7 +149,7 @@ const InstructorAssessments = () => {
 
     try {
       setIsCreating(true);
-      await instructorService.createAssessment(formData);
+      await instructorService.createGeneralAssessment(formData);
       toast({
         title: "Success",
         description: "Assessment created successfully",
@@ -204,7 +204,7 @@ const InstructorAssessments = () => {
 
     setIsDeleting(true);
     try {
-      await instructorService.deleteAssessment(assessmentToDelete);
+      await instructorService.deleteGeneralAssessment(assessmentToDelete);
       toast({
         title: "Success",
         description: "Assessment deleted successfully",
