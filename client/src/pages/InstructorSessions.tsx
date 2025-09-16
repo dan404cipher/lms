@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import ConfirmationModal from "@/components/ConfirmationModal";
 import { 
   Plus, 
   Calendar, 
@@ -62,6 +63,9 @@ const InstructorSessions = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -233,13 +237,17 @@ const InstructorSessions = () => {
     }
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this session?')) {
-      return;
-    }
+  const handleDeleteSession = (sessionId: string) => {
+    setSessionToDelete(sessionId);
+    setShowDeleteModal(true);
+  };
 
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+
+    setIsDeleting(true);
     try {
-      const response = await instructorService.deleteSession(sessionId);
+      const response = await instructorService.deleteSession(sessionToDelete);
       if (response.success) {
         toast({
           title: "Success",
@@ -254,6 +262,10 @@ const InstructorSessions = () => {
         description: "Failed to delete session. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setSessionToDelete(null);
     }
   };
 
@@ -695,6 +707,22 @@ const InstructorSessions = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Session Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSessionToDelete(null);
+        }}
+        onConfirm={confirmDeleteSession}
+        title="Delete Session"
+        description="Are you sure you want to delete this session? This action cannot be undone."
+        confirmText="Delete Session"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

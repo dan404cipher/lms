@@ -62,6 +62,9 @@ const InstructorAssessments = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [assessmentToDelete, setAssessmentToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -191,11 +194,17 @@ const InstructorAssessments = () => {
     setIsViewModalOpen(true);
   };
 
-  const handleDeleteAssessment = async (assessmentId: string) => {
-    if (!confirm("Are you sure you want to delete this assessment?")) return;
+  const handleDeleteAssessment = (assessmentId: string) => {
+    setAssessmentToDelete(assessmentId);
+    setShowDeleteModal(true);
+  };
 
+  const confirmDeleteAssessment = async () => {
+    if (!assessmentToDelete) return;
+
+    setIsDeleting(true);
     try {
-      await instructorService.deleteAssessment(assessmentId);
+      await instructorService.deleteAssessment(assessmentToDelete);
       toast({
         title: "Success",
         description: "Assessment deleted successfully",
@@ -208,6 +217,10 @@ const InstructorAssessments = () => {
         description: error.response?.data?.message || "Failed to delete assessment",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setAssessmentToDelete(null);
     }
   };
 
@@ -562,6 +575,22 @@ const InstructorAssessments = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Assessment Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setAssessmentToDelete(null);
+        }}
+        onConfirm={confirmDeleteAssessment}
+        title="Delete Assessment"
+        description="Are you sure you want to delete this assessment? This action cannot be undone."
+        confirmText="Delete Assessment"
+        cancelText="Cancel"
+        variant="destructive"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };
