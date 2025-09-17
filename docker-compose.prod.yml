@@ -29,15 +29,15 @@ services:
       ZOOM_CLIENT_SECRET: 9kdBGP1Q7pT74ytpviypTRMaG437Xfwy
       ZOOM_REDIRECT_URI: https://axessupskill.v-accel.ai/api/auth/zoom/callback
       UPLOADS_PATH: ./uploads
-      MAX_FILE_SIZE_MB: 10
-      MAX_IMAGE_SIZE_MB: 2
+      MAX_FILE_SIZE_MB: 0
+      MAX_IMAGE_SIZE_MB: 0
       RATE_LIMIT_ENABLED: true
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX_REQUESTS: 100
       LOG_LEVEL: info
       API_DOCS_ENABLED: false
       BCRYPT_ROUNDS: 12
-      MAX_FILE_SIZE: 10485760
+      MAX_FILE_SIZE: 0
       REDIS_URL: redis://localhost:6379
     volumes:
       - lms_uploads:/app/uploads

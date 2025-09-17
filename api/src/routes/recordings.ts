@@ -81,7 +81,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 0 // No file size limit for recordings
+    fileSize: 10 * 1024 * 1024 * 1024 // 10GB limit for recordings
   }
 });
 

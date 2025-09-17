@@ -31,7 +31,7 @@ export const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 0, // No file size limit
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
     files: 1 // Only allow 1 file at a time
   }
 });
@@ -41,7 +41,7 @@ export const uploadMultiple = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 0, // No file size limit
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
     files: 5 // Allow up to 5 files
   }
 });
@@ -58,7 +58,7 @@ export const imageUpload = multer({
     }
   },
   limits: {
-    fileSize: 0, // No file size limit
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
     files: 1
   }
 });
@@ -74,7 +74,7 @@ export const videoUpload = multer({
     }
   },
   limits: {
-    fileSize: 0, // No file size limit
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
     files: 1
   }
 });
@@ -90,7 +90,7 @@ export const documentUpload = multer({
     }
   },
   limits: {
-    fileSize: 0, // No file size limit
+    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit
     files: 1
   }
 });

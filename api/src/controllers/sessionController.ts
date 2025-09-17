@@ -39,12 +39,15 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
     }
 
     // Check if user is the instructor or admin
-    if (course.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to create sessions for this course'
-      });
+    if (!course.instructorId || 
+        course.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to create sessions for this course'
+        });
+      }
     }
 
     // Create Zoom meeting with real integration
@@ -224,12 +227,15 @@ export const updateSession = async (req: AuthRequest, res: Response, next: NextF
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to update this session'
+        });
+      }
     }
 
     const updatedSession = await Session.findByIdAndUpdate(
@@ -263,12 +269,15 @@ export const deleteSession = async (req: AuthRequest, res: Response, next: NextF
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to delete this session'
+        });
+      }
     }
 
     await Session.findByIdAndDelete(req.params.id);
@@ -317,7 +326,7 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
       status: { $in: ['active', 'completed'] }
     });
 
-    const isInstructor = session.instructorId.toString() === req.user._id.toString();
+    const isInstructor = session.instructorId && session.instructorId.toString() === req.user._id.toString();
     const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
 
     console.log('Authorization check:', {
@@ -397,12 +406,15 @@ export const getSessionAttendance = async (req: AuthRequest, res: Response, next
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view attendance for this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to view attendance for this session'
+        });
+      }
     }
 
     // Get attendance records (this would come from the Attendance model)
@@ -441,12 +453,15 @@ export const markAttendance = async (req: AuthRequest, res: Response, next: Next
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to mark attendance for this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to mark attendance for this session'
+        });
+      }
     }
 
     // Create or update attendance record (this would use the Attendance model)
@@ -576,12 +591,15 @@ export const startSession = async (req: AuthRequest, res: Response, next: NextFu
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to start this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to start this session'
+        });
+      }
     }
 
     // Update session status to live
@@ -619,12 +637,15 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to end this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to end this session'
+        });
+      }
     }
 
     // Update session status to completed
@@ -1003,12 +1024,15 @@ export const downloadRecordingManually = async (req: AuthRequest, res: Response,
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to download recordings for this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to download recordings for this session'
+        });
+      }
     }
 
     if (!session.zoomMeetingId) {
@@ -1094,12 +1118,15 @@ export const checkForRecordings = async (req: AuthRequest, res: Response, next: 
     }
 
     // Check authorization
-    if (session.instructorId.toString() !== req.user._id.toString() && 
-        !['admin', 'super_admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to check recordings for this session'
-      });
+    if (!session.instructorId || 
+        session.instructorId.toString() !== req.user._id.toString()) {
+      // If no instructorId or user is not the instructor, check if they're admin
+      if (!['admin', 'super_admin'].includes(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to check recordings for this session'
+        });
+      }
     }
 
     if (!session.zoomMeetingId) {
