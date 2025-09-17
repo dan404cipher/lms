@@ -21,10 +21,11 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         errors: errors.array() 
       });
+      return;
     }
 
     const { courseId, title, description, scheduledAt, duration, type, maxParticipants } = req.body;
@@ -32,10 +33,11 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
     // Check if course exists
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Course not found'
       });
+      return;
     }
 
     // Check if user is the instructor or admin
@@ -43,10 +45,11 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
         course.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to create sessions for this course'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to create sessions for this course'
+      });
+      return;
       }
     }
 
@@ -124,10 +127,11 @@ export const getSessions = async (req: AuthRequest, res: Response, next: NextFun
         });
         
         if (!enrollment) {
-          return res.status(403).json({
-            success: false,
-            message: 'You must be enrolled in this course to view sessions'
-          });
+      res.status(403).json({
+        success: false,
+        message: 'You must be enrolled in this course to view sessions'
+      });
+      return;
         }
       }
     }
@@ -189,10 +193,11 @@ export const getSession = async (req: AuthRequest, res: Response, next: NextFunc
       .populate('instructorId', 'name');
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     res.json({
@@ -211,19 +216,21 @@ export const updateSession = async (req: AuthRequest, res: Response, next: NextF
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         errors: errors.array() 
       });
+      return;
     }
 
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -231,10 +238,11 @@ export const updateSession = async (req: AuthRequest, res: Response, next: NextF
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to update this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this session'
+      });
+      return;
       }
     }
 
@@ -262,10 +270,11 @@ export const deleteSession = async (req: AuthRequest, res: Response, next: NextF
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -273,10 +282,11 @@ export const deleteSession = async (req: AuthRequest, res: Response, next: NextF
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to delete this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this session'
+      });
+      return;
       }
     }
 
@@ -306,10 +316,11 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
       .populate('courseId', 'title');
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     console.log('Session found:', {
@@ -338,10 +349,11 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
 
     if (!enrollment && !isInstructor && !isAdmin) {
       console.log('Access denied: User not enrolled, not instructor, not admin');
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'You must be enrolled in this course to join the session'
       });
+      return;
     }
 
     console.log('Access granted, proceeding with join');
@@ -363,17 +375,19 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
     const sessionEndTime = new Date(sessionTime.getTime() + session.duration * 60000);
 
     if (now < sessionTime) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Session has not started yet'
       });
+      return;
     }
 
     if (now > sessionEndTime) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Session has already ended'
       });
+      return;
     }
     */
 
@@ -399,10 +413,11 @@ export const getSessionAttendance = async (req: AuthRequest, res: Response, next
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -410,10 +425,11 @@ export const getSessionAttendance = async (req: AuthRequest, res: Response, next
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to view attendance for this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to view attendance for this session'
+      });
+      return;
       }
     }
 
@@ -446,10 +462,11 @@ export const markAttendance = async (req: AuthRequest, res: Response, next: Next
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -457,10 +474,11 @@ export const markAttendance = async (req: AuthRequest, res: Response, next: Next
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to mark attendance for this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to mark attendance for this session'
+      });
+      return;
       }
     }
 
@@ -584,10 +602,11 @@ export const startSession = async (req: AuthRequest, res: Response, next: NextFu
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -595,10 +614,11 @@ export const startSession = async (req: AuthRequest, res: Response, next: NextFu
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to start this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to start this session'
+      });
+      return;
       }
     }
 
@@ -630,10 +650,11 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -641,10 +662,11 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to end this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to end this session'
+      });
+      return;
       }
     }
 
@@ -703,9 +725,54 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
       }
     }
 
+    // Log session end activity
+    await ActivityLogger.logInstructorAction(
+      (req.user as any)._id.toString(),
+      'Session Ended',
+      session.courseId.toString(),
+      { sessionId: session._id, sessionTitle: session.title },
+      req
+    );
+
     res.json({
       success: true,
       message: 'Session ended successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Leave session
+// @route   POST /api/sessions/:id/leave
+// @access  Private
+export const leaveSession = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const session = await Session.findById(req.params.id);
+
+    if (!session) {
+      res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+      return;
+      return;
+    }
+
+    // Log session leave activity
+    const duration = session.startedAt ? Date.now() - new Date(session.startedAt).getTime() : 0;
+    await ActivityLogger.logSessionLeave(
+      (req.user as any)._id.toString(),
+      (session as any)._id.toString(),
+      session.title,
+      (session as any).courseId.toString(),
+      duration,
+      req
+    );
+
+    res.json({
+      success: true,
+      message: 'Left session successfully'
     });
   } catch (error) {
     next(error);
@@ -720,10 +787,11 @@ export const getSessionRecordings = async (req: AuthRequest, res: Response, next
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Get Zoom recordings
@@ -817,10 +885,11 @@ export const downloadRecording = async (req: AuthRequest, res: Response, next: N
     const recording = await Recording.findOne({ zoomRecordingId: recordingId });
     
     if (!recording) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Recording not found'
       });
+      return;
     }
 
     // Check if user has access to this recording (enrolled in course)
@@ -831,10 +900,11 @@ export const downloadRecording = async (req: AuthRequest, res: Response, next: N
     });
 
     if (!enrollment) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         message: 'You must be enrolled in this course to access recordings'
       });
+      return;
     }
 
     // If we have a local file, serve it directly
@@ -1017,10 +1087,11 @@ export const downloadRecordingManually = async (req: AuthRequest, res: Response,
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -1028,28 +1099,31 @@ export const downloadRecordingManually = async (req: AuthRequest, res: Response,
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to download recordings for this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to download recordings for this session'
+      });
+      return;
       }
     }
 
     if (!session.zoomMeetingId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'No Zoom meeting associated with this session'
       });
+      return;
     }
 
     // Get recordings from Zoom
     const zoomRecordings = await zoomIntegration.getMeetingRecordings(session.zoomMeetingId);
     
     if (zoomRecordings.length === 0) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'No recordings found for this session'
       });
+      return;
     }
 
     const downloadedRecordings = [];
@@ -1111,10 +1185,11 @@ export const checkForRecordings = async (req: AuthRequest, res: Response, next: 
     const session = await Session.findById(req.params.id);
 
     if (!session) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         message: 'Session not found'
       });
+      return;
     }
 
     // Check authorization
@@ -1122,18 +1197,20 @@ export const checkForRecordings = async (req: AuthRequest, res: Response, next: 
         session.instructorId.toString() !== req.user._id.toString()) {
       // If no instructorId or user is not the instructor, check if they're admin
       if (!['admin', 'super_admin'].includes(req.user.role)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to check recordings for this session'
-        });
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to check recordings for this session'
+      });
+      return;
       }
     }
 
     if (!session.zoomMeetingId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'No Zoom meeting associated with this session'
       });
+      return;
     }
 
     try {

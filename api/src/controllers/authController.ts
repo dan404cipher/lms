@@ -566,3 +566,20 @@ export const changePassword = async (req: AuthRequest, res: Response, next: Next
     next(error);
   }
 };
+
+// @desc    Logout user
+// @route   POST /api/auth/logout
+// @access  Private
+export const logout = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    // Log logout activity
+    await ActivityLogger.logLogout((req.user as any)._id.toString(), req);
+
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

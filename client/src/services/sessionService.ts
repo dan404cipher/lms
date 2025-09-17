@@ -128,6 +128,11 @@ class SessionService {
     return response.data;
   }
 
+  async leaveSession(sessionId: string): Promise<{ success: boolean }> {
+    const response = await sessionAxios.post(`/sessions/${sessionId}/leave`, {});
+    return response.data;
+  }
+
   // Recording Management
   async getRecordings(courseId?: string): Promise<{ success: boolean; data: { recordings: Recording[] } }> {
     const params = courseId ? { courseId } : {};

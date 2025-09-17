@@ -154,6 +154,11 @@ class AuthService {
     const response = await authAxios.put('/auth/profile', data);
     return response.data;
   }
+
+  async logout(): Promise<any> {
+    const response = await authAxios.post('/auth/logout');
+    return response.data;
+  }
 }
 
 export default new AuthService();

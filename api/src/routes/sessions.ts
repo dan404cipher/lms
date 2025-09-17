@@ -9,6 +9,7 @@ import {
   joinSession,
   startSession,
   endSession,
+  leaveSession,
   getSessionAttendance,
   markAttendance,
   getMyActivities,
@@ -48,6 +49,7 @@ router.get('/recordings/:recordingId/download', downloadRecording);
 
 router.get('/:id', getSession);
 router.post('/:id/join', joinSession);
+router.post('/:id/leave', leaveSession);
 
 // Instructor/Admin routes
 router.use(authorize('instructor', 'admin', 'super_admin'));

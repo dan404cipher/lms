@@ -239,7 +239,6 @@ const UnifiedCourseDetail = () => {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null);
   const [deleteMaterialId, setDeleteMaterialId] = useState<string | null>(null);
-  const [deleteSessionId, setDeleteSessionId] = useState<string | null>(null);
   const [showDeleteCourseModal, setShowDeleteCourseModal] = useState(false);
   const [isDeletingCourse, setIsDeletingCourse] = useState(false);
 
@@ -268,6 +267,13 @@ const UnifiedCourseDetail = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
+  
+  // Filter states
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [enrollmentFilter, setEnrollmentFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<any>(null);
 
@@ -288,6 +294,90 @@ const UnifiedCourseDetail = () => {
       return course.category.name;
     }
     return 'Uncategorized';
+  };
+
+  // Helper function to filter and sort users
+  const getFilteredAndSortedUsers = (users: any[], isEnrolled: boolean = false) => {
+    let filtered = users.filter(user => {
+      // Search filter
+      const matchesSearch = searchTerm === '' || 
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.status && user.status.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      // Role filter
+      const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+
+      // Status filter
+      const matchesStatus = statusFilter === 'all' || 
+        (user.status && user.status.toLowerCase() === statusFilter.toLowerCase()) ||
+        (statusFilter === 'active' && (!user.status || user.status === 'active'));
+
+      // Enrollment filter (only for enrolled users)
+      const matchesEnrollment = !isEnrolled || enrollmentFilter === 'all' ||
+        (user.enrollmentStatus && user.enrollmentStatus.toLowerCase() === enrollmentFilter.toLowerCase()) ||
+        (enrollmentFilter === 'active' && (!user.enrollmentStatus || user.enrollmentStatus === 'active'));
+
+      return matchesSearch && matchesRole && matchesStatus && matchesEnrollment;
+    });
+
+    // Sort users
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'email':
+          aValue = a.email.toLowerCase();
+          bValue = b.email.toLowerCase();
+          break;
+        case 'role':
+          aValue = a.role.toLowerCase();
+          bValue = b.role.toLowerCase();
+          break;
+        case 'status':
+          aValue = (a.status || 'active').toLowerCase();
+          bValue = (b.status || 'active').toLowerCase();
+          break;
+        case 'enrollmentDate':
+          aValue = new Date(a.enrolledAt || a.createdAt || 0).getTime();
+          bValue = new Date(b.enrolledAt || b.createdAt || 0).getTime();
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+
+      if (sortOrder === 'asc') {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      } else {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      }
+    });
+
+    return filtered;
+  };
+
+  // Get filtered enrolled students
+  const filteredEnrolledStudents = getFilteredAndSortedUsers(enrolledStudents, true);
+
+  // Get filtered all users (excluding already enrolled)
+  const filteredAllUsers = getFilteredAndSortedUsers(
+    allUsers.filter(user => !enrolledStudents.some(enrolled => enrolled._id === user._id))
+  );
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setRoleFilter('all');
+    setStatusFilter('all');
+    setEnrollmentFilter('all');
+    setSortBy('name');
+    setSortOrder('asc');
   };
 
   // Function to get button text and action based on active tab
@@ -476,17 +566,27 @@ const UnifiedCourseDetail = () => {
 
       // Refresh the enrolled students list
       await fetchEnrolledStudents();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding users to course:', error);
-      console.error('Error response status:', error.response?.status);
-      console.error('Error response data:', JSON.stringify(error.response?.data, null, 2));
-      console.error('Error message:', error.message);
-      console.error('Error response status:', error.response?.status);
-      console.error('Error response headers:', error.response?.headers);
-      console.error('Full error object:', JSON.stringify(error, null, 2));
+      let errorMessage = "Failed to add users to course. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Course not found. Please refresh the page and try again.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to add users to this course.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Invalid request. Please check the user selection.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to add users to course.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -509,10 +609,27 @@ const UnifiedCourseDetail = () => {
 
       // Refresh the enrolled students list
       await fetchEnrolledStudents();
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error removing student from course:', error);
+      let errorMessage = "Failed to remove student from course. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Student or course not found. Please refresh the page and try again.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to remove students from this course.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Invalid request. Please try again.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to remove student from course.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -1084,48 +1201,23 @@ const UnifiedCourseDetail = () => {
     }
   };
 
-  const handleDeleteSession = (sessionId: string) => {
-    setDeleteSessionId(sessionId);
-  };
-
-  const confirmDeleteSession = async () => {
-    if (!courseId || !deleteSessionId) {
-      toast({
-        title: "Error",
-        description: "Course ID or Session ID not found",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const handleDeleteSession = async (sessionId: string) => {
+    console.log('Session deleted:', sessionId);
     try {
-      const service = isAdmin ? adminService : instructorService;
-      await service.deleteSession(courseId, deleteSessionId);
-      
-      // Update the local state to remove the session
-      setCourse(prevCourse => {
-        if (!prevCourse) return null;
-        return {
-          ...prevCourse,
-          sessions: prevCourse.sessions?.filter(s => s._id !== deleteSessionId)
-        };
-      });
-
-      toast({
-        title: "Success",
-        description: "Session deleted successfully",
-      });
-    } catch (error: any) {
-      console.error('Error deleting session:', error);
-      toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to delete session",
-        variant: "destructive",
-      });
-    } finally {
-      setDeleteSessionId(null);
+      let response;
+      if (isAdmin) {
+        response = await adminService.getCourseById(courseId!);
+      } else if (isInstructor) {
+        response = await instructorService.getCourseDetail(courseId!);
+      } else {
+        response = await courseService.getCourseDetail(courseId!);
+      }
+      setCourse(response.data.course);
+    } catch (error) {
+      console.error('Error refreshing course data after session deletion:', error);
     }
   };
+
 
   const handleDeleteCourse = () => {
     setShowDeleteCourseModal(true);
@@ -1142,10 +1234,25 @@ const UnifiedCourseDetail = () => {
         description: "Course deleted successfully.",
       });
       navigate('/courses');
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error deleting course:', error);
+      let errorMessage = "Failed to delete course. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Course not found. It may have already been deleted.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to delete this course.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to delete course.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -1722,19 +1829,140 @@ const UnifiedCourseDetail = () => {
           <TabsContent value="batch" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {/* Batch Management */}
+                <CardTitle className="flex items-center justify-between">
+                  <span>Course User Management</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">
+                      {enrolledStudents.length} enrolled
+                    </Badge>
+                    <Badge variant="secondary">
+                      {allUsers.length} total users
+                    </Badge>
+                  </div>
                 </CardTitle>
+                <CardDescription>
+                  Manage course enrollments, search and filter users by role, status, and other criteria.
+                </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Global Search and Filters */}
+                <div className="space-y-4 mb-6 p-4 border rounded-lg bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">Search & Filters</h4>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={clearAllFilters}
+                      className="text-xs"
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Search */}
+                    <div className="space-y-2">
+                      <Label htmlFor="search" className="text-xs">Search</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="search"
+                          placeholder="Search users..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Role Filter */}
+                    <div className="space-y-2">
+                      <Label htmlFor="roleFilter" className="text-xs">Role</Label>
+                      <Select value={roleFilter} onValueChange={setRoleFilter}>
+                        <SelectTrigger className="text-sm">
+                          <SelectValue placeholder="All Roles" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Roles</SelectItem>
+                          <SelectItem value="student">Student</SelectItem>
+                          <SelectItem value="instructor">Instructor</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="super_admin">Super Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Status Filter */}
+                    <div className="space-y-2">
+                      <Label htmlFor="statusFilter" className="text-xs">Status</Label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="text-sm">
+                          <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Status</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Sort By */}
+                    <div className="space-y-2">
+                      <Label htmlFor="sortBy" className="text-xs">Sort By</Label>
+                      <div className="flex gap-1">
+                        <Select value={sortBy} onValueChange={setSortBy}>
+                          <SelectTrigger className="text-sm flex-1">
+                            <SelectValue placeholder="Sort by" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="name">Name</SelectItem>
+                            <SelectItem value="email">Email</SelectItem>
+                            <SelectItem value="role">Role</SelectItem>
+                            <SelectItem value="status">Status</SelectItem>
+                            <SelectItem value="enrollmentDate">Enrollment Date</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                          className="px-2"
+                        >
+                          {sortOrder === 'asc' ? '↑' : '↓'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Left Column - Users in Course */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">Users in Course</h3>
-                      <Badge variant="outline">
-                        {enrolledStudents.length} users
-                      </Badge>
+                      <h3 className="text-lg font-semibold">Enrolled Users</h3>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {filteredEnrolledStudents.length} of {enrolledStudents.length}
+                        </Badge>
+                        {enrolledStudents.length > 0 && (
+                          <div className="space-y-1">
+                            <Label htmlFor="enrollmentFilter" className="text-xs">Enrollment Status</Label>
+                            <Select value={enrollmentFilter} onValueChange={setEnrollmentFilter}>
+                              <SelectTrigger className="text-xs h-8 w-32">
+                                <SelectValue placeholder="All" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="dropped">Dropped</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {batchLoading ? (
@@ -1742,20 +1970,47 @@ const UnifiedCourseDetail = () => {
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                         <p className="mt-2 text-sm text-muted-foreground">Loading course users...</p>
                       </div>
-                    ) : enrolledStudents.length > 0 ? (
+                    ) : filteredEnrolledStudents.length > 0 ? (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {enrolledStudents.map((user) => (
+                        {filteredEnrolledStudents.map((user) => (
                           <div key={user._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                             <div className="flex items-center space-x-3">
                               <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                                 <User className="h-4 w-4 text-primary" />
                               </div>
-                              <div>
-                                <p className="font-medium">{user.name}</p>
-                                <p className="text-sm text-muted-foreground">{user.email}</p>
-                                <Badge variant="secondary" className="text-xs mt-1">
-                                  {user.role}
-                                </Badge>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium truncate">{user.name}</p>
+                                  <Badge 
+                                    variant={user.status === 'active' ? 'default' : 'secondary'} 
+                                    className="text-xs"
+                                  >
+                                    {user.status || 'active'}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    {user.role}
+                                  </Badge>
+                                  {user.enrollmentStatus && (
+                                    <Badge 
+                                      variant={
+                                        user.enrollmentStatus === 'active' ? 'default' : 
+                                        user.enrollmentStatus === 'completed' ? 'secondary' : 
+                                        'destructive'
+                                      } 
+                                      className="text-xs"
+                                    >
+                                      {user.enrollmentStatus}
+                                    </Badge>
+                                  )}
+                                  {user.enrolledAt && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Enrolled: {new Date(user.enrolledAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
@@ -1763,6 +2018,7 @@ const UnifiedCourseDetail = () => {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => removeStudentFromCourse(user._id)}
+                                title="Remove from course"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
@@ -1784,27 +2040,14 @@ const UnifiedCourseDetail = () => {
                   {/* Right Column - All Users in Database */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">All Users</h3>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search users..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 w-48"
-                        />
-                      </div>
+                      <h3 className="text-lg font-semibold">Available Users</h3>
+                      <Badge variant="outline">
+                        {filteredAllUsers.length} available
+                      </Badge>
                     </div>
 
                     <div className="max-h-96 overflow-y-auto space-y-2">
-                      {allUsers
-                        .filter(user =>
-                          (searchTerm === '' ||
-                            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            user.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
-                          !enrolledStudents.some(enrolled => enrolled._id === user._id)
-                        )
-                        .map((user) => (
+                      {filteredAllUsers.map((user) => (
                           <div
                             key={user._id}
                             className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors cursor-pointer"
@@ -1820,12 +2063,27 @@ const UnifiedCourseDetail = () => {
                               <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                                 <User className="h-4 w-4 text-primary" />
                               </div>
-                              <div>
-                                <p className="font-medium">{user.name}</p>
-                                <p className="text-sm text-muted-foreground">{user.email}</p>
-                                <Badge variant="secondary" className="text-xs mt-1">
-                                  {user.role}
-                                </Badge>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium truncate">{user.name}</p>
+                                  <Badge 
+                                    variant={user.status === 'active' ? 'default' : 'secondary'} 
+                                    className="text-xs"
+                                  >
+                                    {user.status || 'active'}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">
+                                    {user.role}
+                                  </Badge>
+                                  {user.createdAt && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Joined: {new Date(user.createdAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2">
@@ -1839,6 +2097,7 @@ const UnifiedCourseDetail = () => {
                                   e.stopPropagation();
                                   addStudentsToCourse([user._id]);
                                 }}
+                                title="Add to course"
                               >
                                 <Plus className="h-3 w-3" />
                               </Button>
@@ -1847,19 +2106,60 @@ const UnifiedCourseDetail = () => {
                         ))}
                     </div>
 
-                    {allUsers.filter(user =>
-                      !enrolledStudents.some(enrolled => enrolled._id === user._id)
-                    ).length === 0 && (
+                    {filteredAllUsers.length === 0 && (
                         <div className="text-center py-8 border-2 border-dashed border-muted-foreground/25 rounded-lg">
                           <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">No users available</p>
+                          <p className="text-sm text-muted-foreground">
+                            {allUsers.filter(user => !enrolledStudents.some(enrolled => enrolled._id === user._id)).length === 0 
+                              ? "No users available" 
+                              : "No users match the current filters"}
+                          </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            All users are already in this course.
+                            {allUsers.filter(user => !enrolledStudents.some(enrolled => enrolled._id === user._id)).length === 0
+                              ? "All users are already in this course."
+                              : "Try adjusting your search or filter criteria."}
                           </p>
                         </div>
                       )}
                   </div>
                 </div>
+
+                {/* Filter Summary */}
+                {(searchTerm || roleFilter !== 'all' || statusFilter !== 'all' || enrollmentFilter !== 'all') && (
+                  <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>Active filters:</span>
+                      {searchTerm && (
+                        <Badge variant="secondary" className="text-xs">
+                          Search: "{searchTerm}"
+                        </Badge>
+                      )}
+                      {roleFilter !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Role: {roleFilter}
+                        </Badge>
+                      )}
+                      {statusFilter !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Status: {statusFilter}
+                        </Badge>
+                      )}
+                      {enrollmentFilter !== 'all' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Enrollment: {enrollmentFilter}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={clearAllFilters}
+                      className="text-xs"
+                    >
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
 
                 {/* Bulk Actions */}
                 {selectedUsers.length > 0 && (
@@ -1884,6 +2184,26 @@ const UnifiedCourseDetail = () => {
                     </div>
                   </div>
                 )}
+
+                {/* Quick Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-lg bg-muted/10">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary">{enrolledStudents.length}</p>
+                    <p className="text-xs text-muted-foreground">Total Enrolled</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-green-600">{filteredEnrolledStudents.length}</p>
+                    <p className="text-xs text-muted-foreground">Filtered Enrolled</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-blue-600">{filteredAllUsers.length}</p>
+                    <p className="text-xs text-muted-foreground">Available Users</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-orange-600">{selectedUsers.length}</p>
+                    <p className="text-xs text-muted-foreground">Selected</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -1957,11 +2277,27 @@ const UnifiedCourseDetail = () => {
                               console.error('Error refreshing course data:', refreshError);
                               // Don't show error to user since the main action succeeded
                             }
-                          } catch (error) {
+                          } catch (error: any) {
                             console.error('Error updating course status:', error);
+                            let errorMessage = "Failed to update course status. Please try again.";
+                            
+                            if (error.response?.status === 404) {
+                              errorMessage = "Course not found. Please refresh the page and try again.";
+                            } else if (error.response?.status === 403) {
+                              errorMessage = "You don't have permission to update this course status.";
+                            } else if (error.response?.status === 400) {
+                              errorMessage = error.response.data?.message || "Invalid request. Please try again.";
+                            } else if (error.response?.status === 500) {
+                              errorMessage = "Server error occurred. Please try again later.";
+                            } else if (error.response?.data?.message) {
+                              errorMessage = error.response.data.message;
+                            } else if (error.message) {
+                              errorMessage = error.message;
+                            }
+                            
                             toast({
                               title: "Error",
-                              description: "Failed to update course status.",
+                              description: errorMessage,
                               variant: "destructive",
                             });
                           }
@@ -2850,23 +3186,6 @@ const UnifiedCourseDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Session Confirmation Dialog */}
-      <AlertDialog open={!!deleteSessionId} onOpenChange={(open) => !open && setDeleteSessionId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Session</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this session? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteSession} className="bg-red-600 hover:bg-red-700">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Delete Course Confirmation Modal */}
       <ConfirmationModal

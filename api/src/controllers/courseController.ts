@@ -7,6 +7,7 @@ import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { uploadFileLocally, deleteFileLocally } from '../utils/fileUpload';
 import { Material, Recording, Session, Enrollment } from '../models';
+import ActivityLogger from '../utils/activityLogger';
 
 interface AuthRequest extends Request {
   user?: any;
@@ -131,6 +132,16 @@ export const getCourse = async (req: AuthRequest, res: Response, next: NextFunct
         success: false,
         message: 'Course not found'
       });
+    }
+
+    // Log course view activity if user is authenticated
+    if (req.user) {
+      await ActivityLogger.logCourseView(
+        (req.user as any)._id.toString(),
+        (course as any)._id.toString(),
+        course.title,
+        req
+      );
     }
 
     res.json({
@@ -530,7 +541,7 @@ export const deleteModule = async (req: AuthRequest, res: Response, next: NextFu
 // @desc    Get module lessons
 // @route   GET /api/courses/:courseId/modules/:moduleId/lessons
 // @access  Public
-export const getModuleLessons = async (req: Request, res: Response, next: NextFunction) => {
+export const getModuleLessons = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const module = await Module.findById(req.params.moduleId);
     if (!module) {
@@ -544,6 +555,21 @@ export const getModuleLessons = async (req: Request, res: Response, next: NextFu
       moduleId: req.params.moduleId,
       isPublished: true 
     }).sort('order');
+
+    // Log lesson view activity if user is authenticated
+    if (req.user && lessons.length > 0) {
+      // Log view for the first lesson (assuming they're viewing the module)
+      const firstLesson = lessons[0];
+      if (firstLesson) {
+        await ActivityLogger.logLessonView(
+          (req.user as any)._id.toString(),
+          (firstLesson as any)._id.toString(),
+          firstLesson.title,
+          (module as any).courseId.toString(),
+          req
+        );
+      }
+    }
 
     res.json({
       success: true,

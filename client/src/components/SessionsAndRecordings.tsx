@@ -20,7 +20,8 @@ import {
   ExternalLink,
   AlertCircle,
   RefreshCw,
-  Upload
+  Upload,
+  LogOut
 } from "lucide-react";
 
 interface SessionsAndRecordingsProps {
@@ -76,11 +77,25 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
         setRecordings([]);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading sessions:', error);
+      let errorMessage = "Failed to load sessions. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Course not found. Please refresh the page and try again.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to view sessions for this course.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load sessions.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -94,11 +109,60 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
       if (response.success && response.data.joinUrl) {
         window.open(response.data.joinUrl, '_blank');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error joining session:', error);
+      let errorMessage = "Failed to join session. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Session not found. It may have been deleted or cancelled.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to join this session.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Session is not available for joining.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to join session. Please try again.",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLeaveSession = async (sessionId: string) => {
+    try {
+      await sessionService.leaveSession(sessionId);
+      toast({
+        title: "Success",
+        description: "Left session successfully."
+      });
+    } catch (error: any) {
+      console.error('Error leaving session:', error);
+      let errorMessage = "Failed to leave session. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Session not found. It may have been deleted.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to leave this session.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Cannot leave session at this time.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -111,11 +175,27 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
         window.open(response.data.joinUrl, '_blank');
         await loadData(); // Refresh to update session status
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting session:', error);
+      let errorMessage = "Failed to start session. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Session not found. It may have been deleted.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to start this session.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Session cannot be started at this time.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to start session. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -134,11 +214,27 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
         await loadData(); // Refresh to update session status and load recordings
       }, 1000); // Wait 1 second for backend to process
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error ending session:', error);
+      let errorMessage = "Failed to end session. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Session not found. It may have already been ended or deleted.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to end this session.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Session cannot be ended at this time.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to end session. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -265,16 +361,35 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
         title: "Success",
         description: "Session deleted successfully."
       });
-      // Call the parent callback if provided
+      
+      // Refresh sessions list first
+      await loadData();
+      
+      // Call the parent callback if provided (after successful deletion)
       if (onSessionDeleted) {
         onSessionDeleted(sessionToDelete);
       }
-      await loadData(); // Refresh sessions list
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting session:', error);
+      let errorMessage = "Failed to delete session. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Session not found. It may have already been deleted.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to delete this session.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Invalid request. Please try again.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to delete session. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -295,11 +410,27 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error downloading recording:', error);
+      let errorMessage = "Failed to download recording. Please try again.";
+      
+      if (error.response?.status === 404) {
+        errorMessage = "Recording not found. It may have been deleted.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "You don't have permission to download this recording.";
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.message || "Recording is not available for download.";
+      } else if (error.response?.status === 500) {
+        errorMessage = "Server error occurred. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to download recording. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -429,6 +560,18 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
                               >
                                 <ExternalLink className="h-4 w-4 mr-2" />
                                 {status === 'live' ? 'Join Live' : 'Join'}
+                              </Button>
+                            )}
+                            
+                            {/* Leave Session button for live sessions */}
+                            {status === 'live' && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleLeaveSession(session._id)}
+                              >
+                                <LogOut className="h-4 w-4 mr-2" />
+                                Leave Session
                               </Button>
                             )}
                           </>
