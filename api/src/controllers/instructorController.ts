@@ -12,6 +12,7 @@ import { Enrollment } from '../models/Enrollment';
 import { User } from '../models/User';
 import { uploadFileLocally } from '../utils/fileUpload';
 import ActivityLogger from '../utils/activityLogger';
+import { getNotificationService } from '../config/socket';
 import mongoose from 'mongoose';
 import fs from 'fs';
 import path from 'path';
@@ -463,6 +464,18 @@ export const updateCourse = async (req: AuthRequest, res: Response, next: NextFu
       req.body,
       { new: true, runValidators: true }
     );
+
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifyCourseUpdate(courseId || '', {
+        title: updatedCourse?.title || '',
+        description: updatedCourse?.description || '',
+        updatedFields: Object.keys(req.body)
+      });
+    } catch (error) {
+      console.error('Error sending course update notification:', error);
+    }
 
     res.json({
       success: true,

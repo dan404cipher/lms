@@ -7,6 +7,7 @@ import { Enrollment } from '../models/Enrollment';
 import zoomIntegration from '../utils/zoomIntegration';
 import ActivityLogger from '../utils/activityLogger';
 import { RecordingUtils } from '../utils/recordingUtils';
+import { getNotificationService } from '../config/socket';
 import fs from 'fs';
 import path from 'path';
 
@@ -99,6 +100,14 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       startUrl: zoomMeeting.start_url, // Store the host start URL
       instructorId: req.user._id
     });
+
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifySessionCreated(session._id?.toString() || '');
+    } catch (error) {
+      console.error('Error sending session created notification:', error);
+    }
 
     res.status(201).json({
       success: true,
@@ -258,6 +267,14 @@ export const updateSession = async (req: AuthRequest, res: Response, next: NextF
       req.body,
       { new: true, runValidators: true }
     );
+
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifySessionUpdated(req.params.id || '');
+    } catch (error) {
+      console.error('Error sending session updated notification:', error);
+    }
 
     res.json({
       success: true,
@@ -660,6 +677,14 @@ export const startSession = async (req: AuthRequest, res: Response, next: NextFu
     // Update session status to live
     await Session.findByIdAndUpdate(req.params.id, { status: 'live' });
 
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifySessionStart(req.params.id || '');
+    } catch (error) {
+      console.error('Error sending session start notification:', error);
+    }
+
     // For instructors, return the start URL from the Zoom meeting
     // For participants, they should use the join URL
     let startUrl;
@@ -722,6 +747,14 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
 
     // Update session status to completed
     await Session.findByIdAndUpdate(req.params.id, { status: 'completed' });
+
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifySessionEnd(req.params.id || '');
+    } catch (error) {
+      console.error('Error sending session end notification:', error);
+    }
 
     // Process recordings immediately and set up retry mechanism
     if (session.zoomMeetingId) {

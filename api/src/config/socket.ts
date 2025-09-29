@@ -1,13 +1,19 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
+import NotificationService from '../services/notificationService';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   user?: any;
 }
 
+// Global notification service instance
+let notificationService: NotificationService;
+
 export const setupSocketIO = (io: SocketIOServer) => {
+  // Initialize notification service
+  notificationService = new NotificationService(io);
   // Authentication middleware
   io.use(async (socket: AuthenticatedSocket, next) => {
     try {
@@ -121,4 +127,12 @@ export const setupSocketIO = (io: SocketIOServer) => {
   });
 
   return io;
+};
+
+// Export function to get notification service
+export const getNotificationService = (): NotificationService => {
+  if (!notificationService) {
+    throw new Error('Notification service not initialized. Call setupSocketIO first.');
+  }
+  return notificationService;
 };

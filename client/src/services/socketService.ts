@@ -67,6 +67,25 @@ class SocketService {
       this.socket.on('user-stop-typing', callback);
     }
   }
+
+  // Notification handlers
+  onNotification(callback: (notification: any) => void) {
+    if (this.socket) {
+      this.socket.on('notification', callback);
+    }
+  }
+
+  // Remove notification listener
+  offNotification(callback: (notification: any) => void) {
+    if (this.socket) {
+      this.socket.off('notification', callback);
+    }
+  }
+
+  // Get socket instance for direct access
+  getSocket() {
+    return this.socket;
+  }
 }
 
 export default new SocketService();

@@ -14,6 +14,7 @@ import { Lesson } from '../models/Lesson';
 import { Announcement } from '../models/Announcement';
 import { uploadFileLocally } from '../utils/fileUpload';
 import ActivityLogger from '../utils/activityLogger';
+import { getNotificationService } from '../config/socket';
 import fs from 'fs';
 import path from 'path';
 
@@ -625,6 +626,18 @@ export const updateCourse = async (req: AuthRequest, res: Response, next: NextFu
 
     await course.save();
 
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifyCourseUpdate((course._id as any).toString(), {
+        title: course.title,
+        description: course.description,
+        updatedFields: Object.keys(req.body)
+      });
+    } catch (error) {
+      console.error('Error sending course update notification:', error);
+    }
+
     // Populate instructor and category for response
     await course.populate('instructorId', 'name email');
     await course.populate('categoryId', 'name');
@@ -662,6 +675,18 @@ export const updateCourseStatus = async (req: AuthRequest, res: Response, next: 
 
     course.published = req.body.status === 'active';
     await course.save();
+
+    // Send notification to course participants
+    try {
+      const notificationService = getNotificationService();
+      await notificationService.notifyCourseUpdate((course._id as any).toString(), {
+        title: course.title,
+        published: course.published,
+        status: req.body.status
+      });
+    } catch (error) {
+      console.error('Error sending course status update notification:', error);
+    }
 
     res.json({
       success: true,

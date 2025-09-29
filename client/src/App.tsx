@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import Navbar from "./components/Navbar";
 import PageTransition from "./components/PageTransition";
 import Layout from "./components/Layout";
@@ -34,10 +35,11 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+        <NotificationProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
             <div className="min-h-screen bg-background">
               <PageTransition>
                 <Routes>
@@ -73,7 +75,8 @@ const App = () => (
 
             </div>
           </BrowserRouter>
-        </TooltipProvider>
+          </TooltipProvider>
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

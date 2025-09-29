@@ -3672,7 +3672,34 @@ const UnifiedCourseDetail = () => {
                             <FileText className="h-4 w-4" />
                             <span className="text-sm">{file.originalName}</span>
                           </div>
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => {
+                              try {
+                                // Create download link
+                                const link = document.createElement('a');
+                                link.href = file.url;
+                                link.download = file.originalName;
+                                link.target = '_blank';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                
+                                toast({
+                                  title: "Download Started",
+                                  description: `Downloading ${file.originalName}`,
+                                });
+                              } catch (error) {
+                                console.error('Error downloading file:', error);
+                                toast({
+                                  title: "Download Failed",
+                                  description: `Failed to download ${file.originalName}`,
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                          >
                             <Download className="h-3 w-3" />
                           </Button>
                         </div>

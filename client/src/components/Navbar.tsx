@@ -25,6 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Menu, X, Search, LogOut, LayoutDashboard, GraduationCap, Activity, Users, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
+import NotificationCenter from "./NotificationCenter";
 
 const Navbar = memo(() => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -182,6 +183,7 @@ const Navbar = memo(() => {
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
+            {user && <NotificationCenter />}
             {user ? (
               <motion.div
                 whileHover={{ scale: 1.05 }}
