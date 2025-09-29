@@ -18,6 +18,7 @@ import {
   downloadRecording,
   downloadRecordingManually,
   checkForRecordings,
+  syncRecordings,
   zoomWebhook
 } from '../controllers/sessionController';
 import { protect, authorize } from '../middleware/auth';
@@ -46,6 +47,7 @@ router.get('/my-activities', getMyActivities);
 // Recordings routes (must come before /:id routes)
 router.get('/recordings', getRecordings);
 router.get('/recordings/:recordingId/download', downloadRecording);
+router.post('/sync-recordings', syncRecordings);
 
 router.get('/:id', getSession);
 router.post('/:id/join', joinSession);

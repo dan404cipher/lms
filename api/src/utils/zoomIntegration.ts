@@ -96,15 +96,41 @@ class ZoomIntegration {
     };
   }
 
+  private generateMeetingPassword(): string {
+    // Generate a random 6-digit password for the meeting
+    return Math.floor(100000 + Math.random() * 900000).toString();
+  }
+
   async createMeeting(meetingData: ZoomMeetingData): Promise<ZoomMeeting> {
     try {
       if (!this.clientId || !this.clientSecret || !this.accountId) {
-        console.log('Zoom credentials not configured, using mock meeting');
-        // Return mock data if Zoom credentials are not configured
-        return this.createMockMeeting(meetingData);
+        console.log('❌ Zoom credentials not configured!');
+        console.log('📝 Please add ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, and ZOOM_CLIENT_SECRET to your .env file');
+        console.log('🔗 Get credentials from: https://marketplace.zoom.us/');
+        throw new Error('Zoom credentials not configured. Please set up your Zoom API credentials.');
       }
 
-      console.log('Creating Zoom meeting with API...');
+      // Validate meeting data
+      if (!meetingData.topic || meetingData.topic.trim().length === 0) {
+        throw new Error('Meeting topic is required');
+      }
+      
+      if (!meetingData.start_time) {
+        throw new Error('Meeting start time is required');
+      }
+      
+      if (!meetingData.duration || meetingData.duration < 1) {
+        throw new Error('Meeting duration must be at least 1 minute');
+      }
+
+      // Ensure start_time is in the future
+      const startTime = new Date(meetingData.start_time);
+      const now = new Date();
+      if (startTime <= now) {
+        throw new Error('Meeting start time must be in the future');
+      }
+
+      console.log('🚀 Creating real Zoom meeting with API...');
       console.log('Meeting data being sent:', {
         topic: meetingData.topic,
         start_time: meetingData.start_time,
@@ -117,43 +143,76 @@ class ZoomIntegration {
         }
       });
       
+      // Prepare the meeting data according to Zoom API requirements
+      const meetingPayload = {
+        topic: meetingData.topic.substring(0, 200), // Zoom has a 200 character limit
+        type: 2, // Scheduled meeting
+        start_time: meetingData.start_time,
+        duration: parseInt(meetingData.duration.toString()),
+        timezone: meetingData.timezone || 'UTC',
+        password: meetingData.password || this.generateMeetingPassword(),
+        settings: {
+          host_video: true,
+          participant_video: true,
+          join_before_host: true,
+          mute_upon_entry: true,
+          waiting_room: false,
+          auto_recording: 'cloud',
+          recording_authentication: false,
+          allow_multiple_devices: true,
+          ...meetingData.settings
+        }
+      };
+
+      console.log('📤 Sending meeting payload to Zoom API:', JSON.stringify(meetingPayload, null, 2));
+
       const response = await axios.post(
         `${this.baseUrl}/users/me/meetings`,
-        {
-          topic: meetingData.topic,
-          type: 2, // Scheduled meeting
-          start_time: meetingData.start_time,
-          duration: meetingData.duration,
-          timezone: meetingData.timezone || 'UTC',
-          password: meetingData.password,
-          settings: {
-            host_video: true,
-            participant_video: true,
-            join_before_host: true,  // Allow students to join before instructor
-            mute_upon_entry: true,
-            waiting_room: false,     // Disable waiting room for easier access
-            auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
-            recording_authentication: false, // Allow anyone to view recordings
-            allow_multiple_devices: true,
-            ...meetingData.settings
-          }
-        },
+        meetingPayload,
         { headers: await this.getHeaders() }
       );
 
-      console.log('Zoom API response:', response.data);
+      console.log('✅ Zoom meeting created successfully:', response.data.id);
+      console.log('📹 Cloud recording enabled for meeting:', response.data.id);
       return response.data;
     } catch (error) {
-      console.error('Error creating Zoom meeting:', error);
+      console.error('❌ Error creating Zoom meeting:', error);
       if (axios.isAxiosError(error)) {
         console.error('Zoom API error details:', {
           status: error.response?.status,
+          statusText: error.response?.statusText,
           data: error.response?.data,
-          message: error.message
+          message: error.message,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            headers: error.config?.headers
+          }
         });
+        
+        // Log the request data that was sent
+        console.error('Request data that was sent:', {
+          topic: meetingData.topic,
+          start_time: meetingData.start_time,
+          duration: meetingData.duration,
+          timezone: meetingData.timezone,
+          settings: meetingData.settings
+        });
+        
+        // Provide specific error messages
+        if (error.response?.status === 400) {
+          const errorMessage = error.response?.data?.message || 'Bad request';
+          console.error('400 Error details:', error.response?.data);
+          throw new Error(`Zoom API validation error: ${errorMessage}. Check your meeting data format.`);
+        } else if (error.response?.status === 401) {
+          throw new Error('Zoom authentication failed. Please check your API credentials.');
+        } else if (error.response?.status === 403) {
+          throw new Error('Zoom API access denied. Please check your app permissions and scopes.');
+        } else if (error.response?.status === 429) {
+          throw new Error('Zoom API rate limit exceeded. Please try again later.');
+        }
       }
-      // Fallback to mock meeting if Zoom API fails
-      return this.createMockMeeting(meetingData);
+      throw error;
     }
   }
 
@@ -193,6 +252,7 @@ class ZoomIntegration {
   async getMeetingRecordings(meetingId: string): Promise<any[]> {
     try {
       if (!this.clientId || !this.clientSecret || !this.accountId) {
+        console.log('⚠️  MOCK MODE: Zoom credentials not configured. Using mock recordings.');
         // Return mock recordings
         return [{
           id: `rec_${meetingId}`,
@@ -216,18 +276,39 @@ class ZoomIntegration {
         }];
       }
 
+      console.log(`🔍 Fetching recordings for meeting: ${meetingId}`);
       const response = await axios.get(
         `${this.baseUrl}/meetings/${meetingId}/recordings`,
         { headers: await this.getHeaders() }
       );
 
-      return response.data.recording_files || [];
+      console.log(`📹 Found ${response.data.recording_files?.length || 0} recording files`);
+      
+      // Return the full recording data with files
+      return [{
+        id: response.data.uuid || response.data.id,
+        meeting_id: meetingId,
+        recording_start: response.data.start_time,
+        recording_end: response.data.end_time,
+        topic: response.data.topic,
+        total_size: response.data.total_size,
+        recording_count: response.data.recording_count,
+        share_url: response.data.share_url,
+        recording_files: response.data.recording_files || []
+      }];
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404) {
-        console.log(`No recordings found for meeting ${meetingId} - this is normal if recording hasn't started or completed yet`);
+        console.log(`📹 No recordings found for meeting ${meetingId} - this is normal if recording hasn't started or completed yet`);
         return [];
       }
-      console.error('Error getting Zoom recordings:', error);
+      console.error('❌ Error getting Zoom recordings:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Recording API error details:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
+      }
       return [];
     }
   }
@@ -274,27 +355,53 @@ class ZoomIntegration {
           const endTime = new Date(recording.recording_end);
           const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
 
-          // Create recording record
-          const recordingData = {
-            sessionId: session._id,
-            courseId: session.courseId,
-            zoomRecordingId: recording.id,
-            title: recording.topic || `Session Recording - ${session.title}`,
-            description: `Recording of ${session.title} session`,
-            recordingUrl: recording.play_url,
-            downloadUrl: recording.download_url,
-            duration: duration,
-            fileSize: recording.file_size || 0,
-            recordedAt: startTime,
-            isPublic: false,
-            isProcessed: true,
-            thumbnailUrl: recording.thumbnail_url
-          };
+          // Process each recording file
+          for (const file of recording.recording_files || []) {
+            try {
+              // Download recording to local server
+              let localFilePath = null;
+              let localRecordingUrl = file.play_url; // Fallback to Zoom URL
 
-          const newRecording = await Recording.create(recordingData);
-          processedRecordings.push(newRecording);
-          
-          console.log(`Created recording record: ${newRecording._id}`);
+              try {
+                console.log(`📥 Downloading recording file ${file.id} to local server...`);
+                localFilePath = await this.downloadRecordingToLocal({
+                  id: file.id,
+                  download_url: file.download_url,
+                  recording_files: [file]
+                });
+                localRecordingUrl = `/recordings/${path.basename(localFilePath)}`;
+                console.log(`✅ Recording file downloaded to: ${localFilePath}`);
+              } catch (downloadError) {
+                console.warn(`⚠️ Failed to download recording file ${file.id}:`, downloadError instanceof Error ? downloadError.message : 'Unknown error');
+                console.log('Using Zoom URL as fallback');
+              }
+
+              // Create recording record for each file
+              const recordingData = {
+                sessionId: session._id,
+                courseId: session.courseId,
+                zoomRecordingId: file.id,
+                title: `${recording.topic || session.title} - ${file.file_type || 'Recording'}`,
+                description: `Recording of ${session.title} session`,
+                recordingUrl: localRecordingUrl, // Use local URL if available
+                downloadUrl: file.download_url,
+                localFilePath: localFilePath, // Store local file path
+                duration: Math.floor(file.recording_end ? (new Date(file.recording_end).getTime() - new Date(file.recording_start).getTime()) / 1000 : duration),
+                fileSize: file.file_size || 0,
+                recordedAt: new Date(file.recording_start || recording.recording_start),
+                isPublic: false,
+                isProcessed: true,
+                thumbnailUrl: file.thumbnail_url
+              };
+
+              const newRecording = await Recording.create(recordingData);
+              processedRecordings.push(newRecording);
+              
+              console.log(`Created recording record: ${newRecording._id}`);
+            } catch (fileError) {
+              console.error(`Error processing recording file ${file.id}:`, fileError);
+            }
+          }
         } catch (recordingError) {
           console.error(`Error processing recording ${recording.id}:`, recordingError);
         }
@@ -333,12 +440,17 @@ class ZoomIntegration {
     const meetingId = mockId.toString();
     
     console.log('Creating mock meeting with ID:', meetingId);
+    console.log('⚠️  MOCK MODE: Zoom credentials not configured. Using mock meeting for development.');
+    console.log('📝 To use real Zoom meetings, configure ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, and ZOOM_CLIENT_SECRET in your .env file');
+    
+    // For development, we'll create URLs that work with our mock meeting system
+    const baseUrl = process.env.CLIENT_URL || 'http://localhost:3000';
     
     return {
       id: meetingId,
       topic: meetingData.topic,
-      start_url: `https://zoom.us/s/${meetingId}?role=1`,
-      join_url: `https://zoom.us/j/${meetingId}`,
+      start_url: `${baseUrl}/mock-meeting/${meetingId}?role=host&title=${encodeURIComponent(meetingData.topic)}`,
+      join_url: `${baseUrl}/mock-meeting/${meetingId}?role=participant&title=${encodeURIComponent(meetingData.topic)}`,
       password: meetingData.password || 'mock123',
       h323_password: '123456',
       pstn_password: '123456',
@@ -427,8 +539,17 @@ class ZoomIntegration {
         return `/recordings/mock_${recordingData.id}.mp4`;
       }
 
+      // Get the download URL from the recording data
+      const downloadUrl = recordingData.download_url || recordingData.recording_files?.[0]?.download_url;
+      
+      if (!downloadUrl) {
+        throw new Error('No download URL available for this recording');
+      }
+
+      console.log(`📥 Downloading recording from: ${downloadUrl}`);
+
       const headers = await this.getHeaders();
-      const response = await axios.get(recordingData.download_url, {
+      const response = await axios.get(downloadUrl, {
         headers,
         responseType: 'stream'
       });
@@ -450,10 +571,13 @@ class ZoomIntegration {
 
       return new Promise((resolve, reject) => {
         writer.on('finish', () => {
-          console.log(`Recording downloaded to: ${filePath}`);
+          console.log(`✅ Recording downloaded to: ${filePath}`);
           resolve(`/recordings/${fileName}`);
         });
-        writer.on('error', reject);
+        writer.on('error', (error) => {
+          console.error('Error writing recording file:', error);
+          reject(error);
+        });
       });
     } catch (error) {
       console.error('Error downloading recording:', error);

@@ -145,6 +145,16 @@ class SessionService {
     return response.data;
   }
 
+  async syncRecordings(): Promise<{ success: boolean; data: any }> {
+    const response = await sessionAxios.post('/sessions/sync-recordings');
+    return response.data;
+  }
+
+  async downloadRecordingManually(sessionId: string): Promise<{ success: boolean; data: any }> {
+    const response = await sessionAxios.post(`/sessions/${sessionId}/download-recording`);
+    return response.data;
+  }
+
   async downloadRecording(recordingId: string): Promise<Blob> {
     const response = await sessionAxios.get(`/sessions/recordings/${recordingId}/download`, {
       responseType: 'blob'

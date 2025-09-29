@@ -240,6 +240,62 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
     }
   };
 
+  const handleSyncRecordings = async () => {
+    try {
+      toast({
+        title: "Syncing Recordings",
+        description: "Fetching recordings from Zoom... This may take a moment."
+      });
+
+      const response = await sessionService.syncRecordings();
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: `Found ${response.data.totalRecordings} recordings from ${response.data.successfulSessions} sessions.`
+        });
+        
+        // Refresh the data to show new recordings
+        await loadData();
+      }
+    } catch (error: any) {
+      console.error('Error syncing recordings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sync recordings. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDownloadSessionRecording = async (sessionId: string) => {
+    try {
+      toast({
+        title: "Downloading Recording",
+        description: "Downloading recording from Zoom to server... This may take a moment."
+      });
+
+      const response = await sessionService.downloadRecordingManually(sessionId);
+      
+      if (response.success) {
+        toast({
+          title: "Success",
+          description: `Downloaded ${response.data.recordings.length} recordings for this session.`
+        });
+        
+        // Refresh the data to show new recordings
+        await loadData();
+      }
+    } catch (error: any) {
+      console.error('Error downloading recording:', error);
+      toast({
+        title: "Error",
+        description: "Failed to download recording. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleUploadRecording = async (sessionId: string) => {
     try {
       // Create file input element
@@ -480,6 +536,24 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
 
   return (
     <div className="space-y-6">
+      {/* Header with Sync Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Sessions & Recordings</h2>
+          <p className="text-muted-foreground">Manage your live sessions and recordings</p>
+        </div>
+        {(isInstructor || isAdmin) && (
+          <Button 
+            onClick={handleSyncRecordings}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Sync Recordings
+          </Button>
+        )}
+      </div>
+
       {/* Sessions List */}
       <div>
         {sessions.length > 0 ? (
@@ -598,6 +672,18 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
                                 onClick={() => handleEndSession(session._id)}
                               >
                                 End Session
+                              </Button>
+                            )}
+                            
+                            {status === 'ended' && !session.hasRecording && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadSessionRecording(session._id)}
+                                disabled={loading}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download Recording
                               </Button>
                             )}
                             
