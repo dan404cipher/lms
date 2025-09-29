@@ -21,6 +21,7 @@ import {
   createModule,
   createLesson,
   createAssessment,
+  publishAssessment,
   createAnnouncement,
   uploadMaterial,
   downloadMaterial,
@@ -159,6 +160,7 @@ router.delete('/courses/:courseId/enrollments/:userId', removeStudentFromCourse)
 router.post('/courses/:courseId/modules', createModule);
 router.post('/courses/:courseId/modules/:moduleId/lessons', createLesson);
 router.post('/courses/:courseId/assessments', createAssessment);
+router.put('/courses/:courseId/assessments/:assessmentId/publish', publishAssessment);
 router.post('/courses/:courseId/announcements', createAnnouncement);
 router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);
 router.get('/courses/:courseId/materials/:materialId/download', downloadMaterial);

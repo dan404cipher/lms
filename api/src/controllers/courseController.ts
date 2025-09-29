@@ -1,12 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { validationResult } from 'express-validator';
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
+import fs from 'fs';
+import path from 'path';
 
 import { Course } from '../models/Course';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { uploadFileLocally, deleteFileLocally } from '../utils/fileUpload';
-import { Material, Recording, Session, Enrollment } from '../models';
+import { Material, Recording, Session, Enrollment, Assessment, AssessmentSubmission } from '../models';
 import ActivityLogger from '../utils/activityLogger';
 
 interface AuthRequest extends Request {
@@ -852,6 +854,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
   try {
     const courseId = req.params.id;
     const userId = req.user._id;
+    const userRole = req.user.role;
 
     // Get course with populated data
     const course = await Course.findById(courseId)
@@ -943,22 +946,44 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       }
     ];
 
-    const assessments = [
-      {
-        _id: 'assessment-1',
-        title: 'AI Fundamentals Quiz',
-        type: 'quiz' as const,
-        dueDate: '2025-08-20',
-        completed: false
-      },
-      {
-        _id: 'assessment-2',
-        title: 'Machine Learning Assignment',
-        type: 'assignment' as const,
-        dueDate: '2025-08-25',
-        completed: false
-      }
-    ];
+    // Get real assessments for the course
+    // For learners, only show published assessments
+    const assessmentQuery = userRole === 'learner' 
+      ? { courseId, isPublished: true }
+      : { courseId };
+    
+    const assessments = await Assessment.find(assessmentQuery)
+      .populate('instructorId', 'name email')
+      .sort({ dueDate: 1 });
+
+    // For learners, also get their submission status
+    const assessmentsWithSubmissions = await Promise.all(assessments.map(async (assessment) => {
+      const submission = await AssessmentSubmission.findOne({
+        assessmentId: assessment._id,
+        studentId: userId
+      }).sort({ submittedAt: -1 });
+
+      return {
+        _id: assessment._id,
+        title: assessment.title,
+        description: assessment.description,
+        type: assessment.type,
+        dueDate: assessment.dueDate,
+        totalPoints: assessment.totalPoints,
+        isPublished: assessment.isPublished,
+        instructions: assessment.instructions,
+        timeLimit: assessment.timeLimit,
+        createdAt: assessment.createdAt,
+        submission: submission ? {
+          _id: submission._id,
+          status: submission.status,
+          score: submission.score,
+          feedback: submission.feedback,
+          submittedAt: submission.submittedAt,
+          isLate: submission.isLate
+        } : null
+      };
+    }));
 
     // const recordings = [
     //   {
@@ -1021,7 +1046,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       } : undefined,
       syllabus,
       prerequisites,
-      assessments,
+      assessments: assessmentsWithSubmissions,
       groups,
       notes,
       sessions,
@@ -1072,12 +1097,12 @@ export const downloadCourseMaterial = async (req: AuthRequest, res: Response, ne
       });
     }
 
-    // Check if user is enrolled (for students) or is instructor/admin
+    // Check if user is enrolled (for learners) or is instructor/admin
     const isInstructor = course.instructorId.toString() === userId.toString();
     const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
     
     if (!isInstructor && !isAdmin) {
-      // For students, check if they are enrolled
+      // For learners, check if they are enrolled
       const enrollment = await Enrollment.findOne({
         userId: userId,
         courseId: courseId,
@@ -1156,12 +1181,12 @@ export const downloadLessonContent = async (req: AuthRequest, res: Response, nex
       });
     }
 
-    // Check if user is enrolled (for students) or is instructor/admin
+    // Check if user is enrolled (for learners) or is instructor/admin
     const isInstructor = course.instructorId.toString() === userId.toString();
     const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
     
     if (!isInstructor && !isAdmin) {
-      // For students, check if they are enrolled
+      // For learners, check if they are enrolled
       const enrollment = await Enrollment.findOne({
         userId: userId,
         courseId: courseId,
@@ -1304,6 +1329,586 @@ export const markLessonComplete = async (req: AuthRequest, res: Response, next: 
       data: {
         completionPercentage: enrollment.progress.completionPercentage,
         completedLessons: enrollment.progress.completedLessons.length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get assessments for a course
+// @route   GET /api/courses/:courseId/assessments
+// @access  Private (Enrolled learners, instructors, admins)
+export const getCourseAssessments = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check access permissions
+    if (userRole === 'learner') {
+      const enrollment = await Enrollment.findOne({ userId, courseId });
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not enrolled in this course'
+        });
+      }
+    } else if (userRole === 'instructor') {
+      if (course.instructorId.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not the instructor of this course'
+        });
+      }
+    } else if (!['admin', 'super_admin'].includes(userRole)) {
+      // If user is not student, instructor, admin, or super_admin, deny access
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to access this course'
+      });
+    }
+
+    // Get assessments for the course
+    const assessments = await Assessment.find({ courseId })
+      .populate('instructorId', 'name email')
+      .sort({ createdAt: -1 });
+
+    // For learners, also get their submission status
+    let assessmentsWithSubmissions: any[] = assessments;
+    if (userRole === 'learner') {
+      assessmentsWithSubmissions = await Promise.all(
+        assessments.map(async (assessment) => {
+          const submission = await AssessmentSubmission.findOne({
+            assessmentId: assessment._id,
+            studentId: userId
+          }).sort({ attemptNumber: -1 });
+
+          return {
+            ...assessment.toObject(),
+            submission: submission ? {
+              _id: submission._id,
+              status: submission.status,
+              score: submission.score,
+              submittedAt: submission.submittedAt,
+              isLate: submission.isLate,
+              attemptNumber: submission.attemptNumber
+            } : null
+          };
+        })
+      );
+    }
+
+    res.json({
+      success: true,
+      data: {
+        assessments: assessmentsWithSubmissions
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get assessment details
+// @route   GET /api/courses/:courseId/assessments/:assessmentId
+// @access  Private (Enrolled learners, instructors, admins)
+export const getAssessmentDetails = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId } = req.params;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    console.log('getAssessmentDetails - Course data:', {
+      courseId: courseId,
+      courseInstructorId: course.instructorId,
+      courseInstructorIdType: typeof course.instructorId,
+      userId: userId,
+      userRole: userRole,
+      courseTitle: course.title,
+      hasInstructorId: !!course.instructorId
+    });
+
+    // Check access permissions
+    if (userRole === 'learner') {
+      const enrollment = await Enrollment.findOne({ userId, courseId });
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not enrolled in this course'
+        });
+      }
+    } else if (userRole === 'instructor') {
+    console.log('getAssessmentDetails - Instructor check:', {
+      userId: userId,
+      courseInstructorId: course.instructorId,
+      userIdType: typeof userId,
+      instructorIdType: typeof course.instructorId,
+      userIdString: userId.toString(),
+      instructorIdString: course.instructorId ? course.instructorId.toString() : 'NULL',
+      areEqual: course.instructorId ? course.instructorId.toString() === userId.toString() : false,
+      courseData: {
+        _id: course._id,
+        title: course.title,
+        instructorId: course.instructorId
+      }
+    });
+      
+      // More robust comparison - handle both ObjectId and string types
+      const instructorIdStr = course.instructorId ? course.instructorId.toString() : null;
+      const userIdStr = userId ? userId.toString() : null;
+      
+      if (!instructorIdStr || !userIdStr || instructorIdStr !== userIdStr) {
+        // If user is not the instructor, check if they're an admin
+        if (!['admin', 'super_admin'].includes(userRole)) {
+          return res.status(403).json({
+            success: false,
+            message: 'You are not the instructor of this course'
+          });
+        }
+      }
+    } else if (!['admin', 'super_admin'].includes(userRole)) {
+      // If user is not student, instructor, admin, or super_admin, deny access
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to access this course'
+      });
+    }
+
+    // Get assessment details
+    const assessment = await Assessment.findById(assessmentId)
+      .populate('instructorId', 'name email')
+      .populate('courseId', 'title');
+
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    // Check if assessment belongs to the course
+    if (assessment.courseId._id.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment does not belong to this course'
+      });
+    }
+
+    // For learners, also get their submission
+    let submission = null;
+    if (userRole === 'learner') {
+      submission = await AssessmentSubmission.findOne({
+        assessmentId: assessment._id,
+        studentId: userId
+      }).sort({ attemptNumber: -1 });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        assessment,
+        submission: submission ? {
+          _id: submission._id,
+          status: submission.status,
+          score: submission.score,
+          feedback: submission.feedback,
+          submittedAt: submission.submittedAt,
+          isLate: submission.isLate,
+          attemptNumber: submission.attemptNumber,
+          files: submission.files,
+          content: submission.content
+        } : null
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Submit assessment
+// @route   POST /api/courses/:courseId/assessments/:assessmentId/submit
+// @access  Private (Enrolled learners only)
+export const submitAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled in the course
+    const enrollment = await Enrollment.findOne({ userId, courseId });
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not enrolled in this course'
+      });
+    }
+
+    // Check if assessment exists and belongs to the course
+    const assessment = await Assessment.findById(assessmentId);
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    if (assessment.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment does not belong to this course'
+      });
+    }
+
+    // Check if assessment is published
+    if (!assessment.isPublished) {
+      return res.status(400).json({
+        success: false,
+        message: 'Assessment is not yet published'
+      });
+    }
+
+    // Check if due date has passed
+    const now = new Date();
+    if (now > assessment.dueDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Assessment due date has passed'
+      });
+    }
+
+    // Get the next attempt number
+    const lastSubmission = await AssessmentSubmission.findOne({
+      assessmentId,
+      studentId: userId
+    }).sort({ attemptNumber: -1 });
+
+    const attemptNumber = lastSubmission ? lastSubmission.attemptNumber + 1 : 1;
+
+    // Handle file uploads
+    let files: Array<{
+      filename: string;
+      originalName: string;
+      url: string;
+      size: number;
+      mimeType: string;
+    }> = [];
+    
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      // Since we're using memory storage, we need to save files to disk
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(__dirname, '../../uploads/assessments');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      files = await Promise.all(req.files.map(async (file: any) => {
+        // Generate a unique filename
+        const fileExtension = file.originalname.split('.').pop() || 'file';
+        const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExtension}`;
+        const filePath = path.join(uploadsDir, filename);
+        
+        // Save file to disk
+        fs.writeFileSync(filePath, file.buffer);
+        
+        return {
+          filename: filename,
+          originalName: file.originalname || 'unknown',
+          url: `/uploads/assessments/${filename}`,
+          size: file.size || 0,
+          mimeType: file.mimetype || 'application/octet-stream'
+        };
+      }));
+    }
+
+    // Create submission
+    const submission = new AssessmentSubmission({
+      assessmentId,
+      studentId: userId,
+      courseId,
+      submissionType: req.body.submissionType || 'file',
+      content: req.body.content,
+      files,
+      answers: req.body.answers ? JSON.parse(req.body.answers) : undefined,
+      maxScore: assessment.totalPoints,
+      status: 'submitted',
+      submittedAt: new Date(),
+      attemptNumber,
+      timeSpent: req.body.timeSpent ? parseInt(req.body.timeSpent) : undefined
+    });
+
+    await submission.save();
+
+    // Log activity
+    await ActivityLogger.log({
+      userId,
+      type: 'assignment_submit',
+      title: 'Assessment Submitted',
+      description: `Submitted assessment: ${assessment.title}`,
+      metadata: {
+        courseId,
+        assessmentId,
+        submissionId: (submission._id as Types.ObjectId).toString(),
+        actionDetails: {
+          attemptNumber,
+          submissionType: submission.submissionType,
+          isLate: submission.isLate
+        }
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Assessment submitted successfully',
+      data: {
+        submission: {
+          _id: submission._id,
+          status: submission.status,
+          submittedAt: submission.submittedAt,
+          attemptNumber: submission.attemptNumber,
+          isLate: submission.isLate
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get student's assessment submissions
+// @route   GET /api/courses/:courseId/assessments/:assessmentId/submissions
+// @access  Private (Instructors, admins)
+export const getAssessmentSubmissions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId } = req.params;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check access permissions (instructors and admins only)
+    if (userRole === 'instructor') {
+      if (course.instructorId.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not the instructor of this course'
+        });
+      }
+    } else if (userRole === 'learner') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students cannot view assessment submissions'
+      });
+    } else if (!['admin', 'super_admin'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view assessment submissions'
+      });
+    }
+
+    // Check if assessment exists and belongs to the course
+    const assessment = await Assessment.findById(assessmentId);
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    if (assessment.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment does not belong to this course'
+      });
+    }
+
+    // Get all submissions for this assessment
+    const submissions = await AssessmentSubmission.find({ assessmentId })
+      .populate('studentId', 'name email')
+      .populate('gradedBy', 'name email')
+      .sort({ submittedAt: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        assessment: {
+          _id: assessment._id,
+          title: assessment.title,
+          type: assessment.type,
+          dueDate: assessment.dueDate,
+          totalPoints: assessment.totalPoints
+        },
+        submissions: submissions.map(submission => ({
+          _id: submission._id,
+          student: {
+            _id: (submission.studentId as any)._id,
+            name: (submission.studentId as any).name,
+            email: (submission.studentId as any).email
+          },
+          status: submission.status,
+          score: submission.score,
+          maxScore: submission.maxScore,
+          feedback: submission.feedback,
+          submittedAt: submission.submittedAt,
+          gradedAt: submission.gradedAt,
+          gradedBy: submission.gradedBy ? {
+            _id: (submission.gradedBy as any)._id,
+            name: (submission.gradedBy as any).name
+          } : null,
+          isLate: submission.isLate,
+          attemptNumber: submission.attemptNumber,
+          files: submission.files,
+          content: submission.content
+        }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Grade assessment submission
+// @route   PUT /api/courses/:courseId/assessments/:assessmentId/submissions/:submissionId/grade
+// @access  Private (Instructors, admins)
+export const gradeAssessmentSubmission = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId, submissionId } = req.params;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+    const { score, feedback } = req.body;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check access permissions (instructors and admins only)
+    if (userRole === 'instructor') {
+      if (course.instructorId.toString() !== userId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You are not the instructor of this course'
+        });
+      }
+    } else if (userRole === 'learner') {
+      return res.status(403).json({
+        success: false,
+        message: 'Students cannot grade assessments'
+      });
+    } else if (!['admin', 'super_admin'].includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to grade assessments'
+      });
+    }
+
+    // Check if assessment exists and belongs to the course
+    const assessment = await Assessment.findById(assessmentId);
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    if (assessment.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment does not belong to this course'
+      });
+    }
+
+    // Check if submission exists
+    const submission = await AssessmentSubmission.findById(submissionId);
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission not found'
+      });
+    }
+
+    if (submission.assessmentId.toString() !== assessmentId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Submission does not belong to this assessment'
+      });
+    }
+
+    // Validate score
+    if (score < 0 || score > assessment.totalPoints) {
+      return res.status(400).json({
+        success: false,
+        message: `Score must be between 0 and ${assessment.totalPoints}`
+      });
+    }
+
+    // Update submission
+    submission.score = score;
+    submission.feedback = feedback;
+    submission.status = 'graded';
+    submission.gradedAt = new Date();
+    submission.gradedBy = userId;
+
+    await submission.save();
+
+    // Log activity
+    await ActivityLogger.log({
+      userId,
+      type: 'admin_action',
+      title: 'Assessment Graded',
+      description: `Graded assessment submission for ${assessment.title}`,
+      metadata: {
+        courseId,
+        assessmentId,
+        submissionId,
+        studentId: (submission.studentId as Types.ObjectId).toString(),
+        actionDetails: {
+          score,
+          maxScore: assessment.totalPoints,
+          isLate: submission.isLate
+        }
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Assessment graded successfully',
+      data: {
+        submission: {
+          _id: submission._id,
+          score: submission.score,
+          feedback: submission.feedback,
+          status: submission.status,
+          gradedAt: submission.gradedAt
+        }
       }
     });
   } catch (error) {

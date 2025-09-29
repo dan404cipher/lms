@@ -15,6 +15,9 @@ interface ActivityLogData {
     materialId?: string;
     discussionId?: string;
     targetUserId?: string;
+    assessmentId?: string;
+    submissionId?: string;
+    studentId?: string;
     score?: number;
     duration?: number;
     fileSize?: number;

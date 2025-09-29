@@ -69,15 +69,22 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       settings: {
         host_video: true,
         participant_video: true,
-        join_before_host: false,
+        join_before_host: true,  // Allow students to join before instructor
         mute_upon_entry: true,
-        waiting_room: true,
-        auto_recording: 'local',
+        waiting_room: false,     // Disable waiting room for easier access
+        auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
         allow_multiple_devices: true
       }
     });
 
     console.log('Zoom meeting created:', zoomMeeting);
+    console.log('Zoom meeting details for debugging:', {
+      id: zoomMeeting.id,
+      join_url: zoomMeeting.join_url,
+      start_url: zoomMeeting.start_url,
+      password: zoomMeeting.password,
+      settings: zoomMeeting.settings
+    });
 
     const session = await Session.create({
       courseId,
@@ -391,13 +398,41 @@ export const joinSession = async (req: AuthRequest, res: Response, next: NextFun
     }
     */
 
+    // Determine the correct URL based on user role
+    let meetingUrl = session.joinUrl; // Default for students
+    let userRole = 'attendee';
+    
+    if (isInstructor || isAdmin) {
+      // Use the actual start URL from Zoom, fallback to manual construction
+      if (session.startUrl) {
+        meetingUrl = session.startUrl;
+      } else {
+        // For real meetings, use start URL format, for mock meetings use join with role
+        meetingUrl = `https://zoom.us/s/${session.zoomMeetingId}?role=1`;
+      }
+      userRole = 'host';
+    }
+
+    console.log('Join session response:', {
+      sessionId: session._id,
+      joinUrl: session.joinUrl,
+      startUrl: session.startUrl,
+      meetingUrl: meetingUrl,
+      userRole: userRole,
+      isInstructor: isInstructor,
+      isAdmin: isAdmin,
+      zoomMeetingId: session.zoomMeetingId,
+      sessionTitle: session.title
+    });
+
     res.json({
       success: true,
       message: 'Joining session',
       data: { 
-        joinUrl: session.joinUrl,
+        joinUrl: meetingUrl, // Use appropriate URL based on role
         sessionTitle: session.title,
-        courseTitle: (session.courseId as any).title
+        courseTitle: (session.courseId as any).title,
+        userRole: userRole
       }
     });
   } catch (error) {
@@ -627,7 +662,22 @@ export const startSession = async (req: AuthRequest, res: Response, next: NextFu
 
     // For instructors, return the start URL from the Zoom meeting
     // For participants, they should use the join URL
-    const startUrl = session.startUrl || `https://zoom.us/s/${session.zoomMeetingId}?role=1`;
+    let startUrl;
+    if (session.startUrl) {
+      startUrl = session.startUrl;
+    } else {
+      // Fallback for mock meetings or missing start URL
+      startUrl = `https://zoom.us/s/${session.zoomMeetingId}?role=1`;
+    }
+    
+    console.log('Start session debug:', {
+      sessionId: session._id,
+      zoomMeetingId: session.zoomMeetingId,
+      storedStartUrl: session.startUrl,
+      generatedStartUrl: startUrl,
+      instructorId: session.instructorId,
+      userId: req.user._id
+    });
     
     res.json({
       success: true,
@@ -673,55 +723,59 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
     // Update session status to completed
     await Session.findByIdAndUpdate(req.params.id, { status: 'completed' });
 
-    // Immediately try to get and download recordings
+    // Process recordings immediately and set up retry mechanism
     if (session.zoomMeetingId) {
       try {
-        // Wait a bit for Zoom to process the recording
-        setTimeout(async () => {
-          try {
-            const zoomRecordings = await zoomIntegration.getMeetingRecordings(session.zoomMeetingId!);
-            
-            if (zoomRecordings.length > 0) {
-              await Session.findByIdAndUpdate(session._id, { hasRecording: true });
-              
-              for (const zoomRecording of zoomRecordings) {
-                try {
-                  // Download to local storage
-                  const localFilePath = await zoomIntegration.downloadRecordingToLocal(zoomRecording);
-                  
-                  await Recording.create({
-                    sessionId: session._id,
-                    courseId: session.courseId,
-                    zoomRecordingId: zoomRecording.id,
-                    title: `${session.title} - Recording`,
-                    recordingUrl: zoomRecording.share_url || zoomRecording.recording_files?.[0]?.play_url,
-                    downloadUrl: zoomRecording.recording_files?.[0]?.download_url,
-                    localFilePath,
-                    duration: zoomRecording.duration || session.duration * 60,
-                    fileSize: zoomRecording.total_size || 0,
-                    recordedAt: new Date(zoomRecording.recording_start || Date.now()),
-                    isProcessed: true
-                  });
-                  
-                  console.log(`Recording automatically downloaded: ${localFilePath}`);
-                } catch (downloadError) {
-                  console.error(`Failed to download recording ${zoomRecording.id}:`, downloadError);
-                }
-              }
-            } else {
-              console.log('No recordings found yet. This is normal - Zoom recordings take 2-5 minutes to process.');
-              console.log('Session ended. Recording will be available once Zoom processes it.');
-              
-              // Don't create mock recording - let user know recordings take time
-              // The recording will be available when Zoom finishes processing
+        console.log('Processing recordings for ended session...');
+        
+        // Try to process recordings immediately
+        const processedRecordings = await zoomIntegration.processSessionRecordings(
+          (session._id as any).toString(), 
+          session.zoomMeetingId
+        );
+
+        if (processedRecordings.length > 0) {
+          console.log(`Successfully processed ${processedRecordings.length} recordings immediately`);
+          await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+        } else {
+          console.log('No recordings found yet. Setting up retry mechanism...');
+          
+          // Set up retry mechanism for recordings that take time to process
+          const retryProcessing = async (attempt: number = 1, maxAttempts: number = 6) => {
+            if (attempt > maxAttempts) {
+              console.log('Max retry attempts reached for recording processing');
+              return;
             }
-          } catch (recordingError) {
-            console.error('Error processing recordings after session end:', recordingError);
-          }
-        }, 5000); // Wait 5 seconds for immediate feedback in development
+
+            console.log(`Retry attempt ${attempt}/${maxAttempts} for recording processing...`);
+            
+            setTimeout(async () => {
+              try {
+                const recordings = await zoomIntegration.processSessionRecordings(
+                  (session._id as any).toString(), 
+                  session.zoomMeetingId!
+                );
+
+                if (recordings.length > 0) {
+                  console.log(`Successfully processed ${recordings.length} recordings on attempt ${attempt}`);
+                  await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+                } else {
+                  console.log(`No recordings found on attempt ${attempt}, retrying...`);
+                  retryProcessing(attempt + 1, maxAttempts);
+                }
+              } catch (error) {
+                console.error(`Error on retry attempt ${attempt}:`, error);
+                retryProcessing(attempt + 1, maxAttempts);
+              }
+            }, 30000 * attempt); // Exponential backoff: 30s, 60s, 90s, etc.
+          };
+
+          // Start retry mechanism
+          retryProcessing();
+        }
         
       } catch (error) {
-        console.error('Error initiating recording download:', error);
+        console.error('Error processing recordings after session end:', error);
       }
     }
 
@@ -1015,7 +1069,7 @@ const handleMeetingEnded = async (payload: any) => {
 const handleRecordingCompleted = async (payload: any) => {
   try {
     const meetingId = payload.object.id;
-    const recordingData = payload.object;
+    console.log(`Recording completed webhook received for meeting: ${meetingId}`);
     
     // Find the session
     const session = await Session.findOne({ zoomMeetingId: meetingId });
@@ -1024,53 +1078,19 @@ const handleRecordingCompleted = async (payload: any) => {
       return;
     }
 
-    // Update session with recording flag
-    await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+    console.log(`Processing recordings for session: ${session._id}`);
+    
+    // Use the new processSessionRecordings method
+    const processedRecordings = await zoomIntegration.processSessionRecordings(
+      (session._id as any).toString(), 
+      meetingId
+    );
 
-    // Create recording records for each recording file
-    if (recordingData.recording_files && recordingData.recording_files.length > 0) {
-      for (const file of recordingData.recording_files) {
-        try {
-          // Download recording to local storage
-          const localFilePath = await zoomIntegration.downloadRecordingToLocal(file);
-          
-          await Recording.create({
-            sessionId: session._id,
-            courseId: session.courseId,
-            zoomRecordingId: file.id,
-            title: `${session.title} - Recording`,
-            recordingUrl: file.play_url, // Keep original Zoom URL as backup
-            downloadUrl: file.download_url,
-            localFilePath, // Store local file path
-            duration: file.recording_end ? 
-              Math.floor((new Date(file.recording_end).getTime() - new Date(file.recording_start).getTime()) / 1000) : 
-              session.duration * 60,
-            fileSize: file.file_size || 0,
-            recordedAt: new Date(file.recording_start),
-            isProcessed: true
-          });
-          
-          console.log(`Recording downloaded and saved locally: ${localFilePath}`);
-        } catch (downloadError) {
-          console.error(`Failed to download recording ${file.id}:`, downloadError);
-          
-          // Fallback: Save metadata without local file
-          await Recording.create({
-            sessionId: session._id,
-            courseId: session.courseId,
-            zoomRecordingId: file.id,
-            title: `${session.title} - Recording`,
-            recordingUrl: file.play_url,
-            downloadUrl: file.download_url,
-            duration: file.recording_end ? 
-              Math.floor((new Date(file.recording_end).getTime() - new Date(file.recording_start).getTime()) / 1000) : 
-              session.duration * 60,
-            fileSize: file.file_size || 0,
-            recordedAt: new Date(file.recording_start),
-            isProcessed: false // Mark as not processed due to download failure
-          });
-        }
-      }
+    if (processedRecordings.length > 0) {
+      console.log(`Successfully processed ${processedRecordings.length} recordings via webhook`);
+      await Session.findByIdAndUpdate(session._id, { hasRecording: true });
+    } else {
+      console.log('No recordings were processed via webhook. This might be because recordings are still being processed by Zoom.');
     }
     
     console.log(`Recording completed for meeting ${meetingId} - session and recordings updated`);

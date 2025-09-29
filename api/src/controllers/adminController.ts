@@ -1447,6 +1447,47 @@ export const createAssessment = async (req: AuthRequest, res: Response, next: Ne
   }
 };
 
+// @desc    Publish/Unpublish assessment (Admin only)
+// @route   PUT /api/admin/courses/:courseId/assessments/:assessmentId/publish
+// @access  Private (Admin)
+export const publishAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId } = req.params;
+    const { isPublished } = req.body;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Find and update assessment
+    const assessment = await Assessment.findOneAndUpdate(
+      { _id: assessmentId, courseId },
+      { isPublished },
+      { new: true, runValidators: true }
+    );
+
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Assessment ${isPublished ? 'published' : 'unpublished'} successfully`,
+      data: { assessment }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Create announcement (Admin only)
 // @route   POST /api/admin/courses/:courseId/announcements
 // @access  Private (Admin)

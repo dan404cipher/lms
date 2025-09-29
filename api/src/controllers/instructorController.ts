@@ -5,6 +5,7 @@ import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { Session } from '../models/Session';
 import { Assessment } from '../models/Assessment';
+import { AssessmentSubmission } from '../models/AssessmentSubmission';
 import { Material } from '../models/Material';
 import { Announcement } from '../models/Announcement';
 import { Enrollment } from '../models/Enrollment';
@@ -219,22 +220,26 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       }
     ];
 
-    const studentAssessments = [
-      {
-        _id: 'assessment-1',
-        title: 'AI Fundamentals Quiz',
-        type: 'quiz' as const,
-        dueDate: '2025-08-20',
-        completed: false
-      },
-      {
-        _id: 'assessment-2',
-        title: 'Machine Learning Assignment',
-        type: 'assignment' as const,
-        dueDate: '2025-08-25',
-        completed: false
-      }
-    ];
+    // Get real assessments for the course with submission counts
+    const studentAssessments = await Promise.all(assessments.map(async (assessment) => {
+      const submissionCount = await AssessmentSubmission.countDocuments({
+        assessmentId: assessment._id
+      });
+
+      return {
+        _id: assessment._id,
+        title: assessment.title,
+        description: assessment.description,
+        type: assessment.type,
+        dueDate: assessment.dueDate,
+        totalPoints: assessment.totalPoints,
+        isPublished: assessment.isPublished,
+        instructions: assessment.instructions,
+        timeLimit: assessment.timeLimit,
+        createdAt: assessment.createdAt,
+        submissionCount
+      };
+    }));
 
     const recordings = [
       {
@@ -1267,6 +1272,54 @@ export const updateAssessment = async (req: AuthRequest, res: Response, next: Ne
   }
 };
 
+// @desc    Publish/Unpublish assessment
+// @route   PUT /api/instructor/assessments/:assessmentId/publish
+// @access  Private (Instructors only)
+export const publishAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { assessmentId } = req.params;
+    const { isPublished } = req.body;
+    const userId = req.user._id;
+
+    const assessment = await Assessment.findOneAndUpdate(
+      { _id: assessmentId, instructorId: userId },
+      { isPublished },
+      { new: true, runValidators: true }
+    );
+
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or you do not have permission to access it'
+      });
+    }
+
+    // Populate course information for response
+    await assessment.populate('courseId', 'title');
+
+    res.json({
+      success: true,
+      message: `Assessment ${isPublished ? 'published' : 'unpublished'} successfully`,
+      data: { 
+        assessment: {
+          _id: assessment._id,
+          title: assessment.title,
+          description: assessment.description,
+          type: assessment.type,
+          courseId: assessment.courseId._id,
+          courseTitle: (assessment.courseId as any).title,
+          dueDate: assessment.dueDate,
+          maxScore: assessment.totalPoints,
+          status: assessment.isPublished ? 'published' : 'draft',
+          createdAt: assessment.createdAt
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const deleteAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const courseId = req.params.courseId;
@@ -1710,10 +1763,17 @@ export const startSession = async (req: AuthRequest, res: Response, next: NextFu
     session.startedAt = new Date();
     await session.save();
 
+    // Return the start URL for instructors to join as host
+    const startUrl = session.startUrl || `https://zoom.us/s/${session.zoomMeetingId}?role=1`;
+
     res.json({
       success: true,
       message: 'Session started successfully',
-      data: { session }
+      data: { 
+        session,
+        joinUrl: startUrl, // Return start URL for instructors
+        userRole: 'host'
+      }
     });
   } catch (error) {
     next(error);

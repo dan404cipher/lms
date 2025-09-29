@@ -98,6 +98,36 @@ class CourseService {
     const response = await courseAxios.post(`/courses/${courseId}/lessons/${lessonId}/complete`);
     return response.data;
   }
+
+  // Assessment methods
+  async getCourseAssessments(courseId: string) {
+    const response = await courseAxios.get(`/courses/${courseId}/assessments`);
+    return response.data;
+  }
+
+  async getAssessmentDetails(courseId: string, assessmentId: string) {
+    const response = await courseAxios.get(`/courses/${courseId}/assessments/${assessmentId}`);
+    return response.data;
+  }
+
+  async submitAssessment(courseId: string, assessmentId: string, submissionData: FormData) {
+    const response = await courseAxios.post(`/courses/${courseId}/assessments/${assessmentId}/submit`, submissionData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  }
+
+  async getAssessmentSubmissions(courseId: string, assessmentId: string) {
+    const response = await courseAxios.get(`/courses/${courseId}/assessments/${assessmentId}/submissions`);
+    return response.data;
+  }
+
+  async gradeAssessmentSubmission(courseId: string, assessmentId: string, submissionId: string, gradeData: { score: number; feedback?: string }) {
+    const response = await courseAxios.put(`/courses/${courseId}/assessments/${assessmentId}/submissions/${submissionId}/grade`, gradeData);
+    return response.data;
+  }
 }
 
 export default new CourseService();

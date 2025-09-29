@@ -199,6 +199,7 @@ interface CourseDetail {
   sessions?: Session[];
   materials?: Material[];
   announcements?: Announcement[];
+  assessments?: any[];
   published?: boolean;
   createdAt?: string;
 }
@@ -276,6 +277,20 @@ const UnifiedCourseDetail = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<any>(null);
+
+  // Assessment state
+  const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [submissionFiles, setSubmissionFiles] = useState<FileList | null>(null);
+  const [submissionContent, setSubmissionContent] = useState('');
+  const [isSubmittingAssessment, setIsSubmittingAssessment] = useState(false);
+  const [assessmentSubmissions, setAssessmentSubmissions] = useState<any[]>([]);
+  const [showGradingModal, setShowGradingModal] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+  const [gradingScore, setGradingScore] = useState<number>(0);
+  const [gradingFeedback, setGradingFeedback] = useState('');
+  const [publishingAssessment, setPublishingAssessment] = useState<string | null>(null);
 
   const isInstructor = user?.role === 'instructor';
   const isAdmin = user?.role === 'admin';
@@ -1261,6 +1276,158 @@ const UnifiedCourseDetail = () => {
     }
   };
 
+  // Assessment functions
+  const handlePublishAssessment = async (assessmentId: string, isPublished: boolean) => {
+    if (!courseId) return;
+
+    try {
+      setPublishingAssessment(assessmentId);
+      
+      const service = isAdmin ? adminService : instructorService;
+      await service.publishAssessment(courseId, assessmentId, isPublished);
+
+      toast({
+        title: "Success",
+        description: `Assessment ${isPublished ? 'published' : 'unpublished'} successfully.`,
+      });
+
+      // Refresh course data to show updated assessment status
+      await fetchCourseDetail();
+    } catch (error: any) {
+      console.error('Error publishing assessment:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to update assessment status.",
+        variant: "destructive",
+      });
+    } finally {
+      setPublishingAssessment(null);
+    }
+  };
+
+  const handleViewAssessment = async (assessmentId: string) => {
+    if (!courseId) return;
+
+    try {
+      const response = await courseService.getAssessmentDetails(courseId, assessmentId);
+      setSelectedAssessment(response.data.assessment);
+      setShowAssessmentModal(true);
+
+      // If user is instructor/admin, also fetch submissions
+      if (isInstructor || isAdmin) {
+        const submissionsResponse = await courseService.getAssessmentSubmissions(courseId, assessmentId);
+        setAssessmentSubmissions(submissionsResponse.data.submissions || []);
+      }
+    } catch (error) {
+      console.error('Error fetching assessment details:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch assessment details",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSubmitAssessment = async () => {
+    if (!courseId || !selectedAssessment) return;
+
+    if (!submissionFiles && !submissionContent.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide either files or text content for your submission",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsSubmittingAssessment(true);
+
+      const formData = new FormData();
+      formData.append('submissionType', submissionFiles ? 'file' : 'text');
+      formData.append('content', submissionContent);
+
+      if (submissionFiles) {
+        Array.from(submissionFiles).forEach((file) => {
+          formData.append('files', file);
+        });
+      }
+
+      await courseService.submitAssessment(courseId, selectedAssessment._id, formData);
+
+      toast({
+        title: "Success",
+        description: "Assessment submitted successfully!",
+      });
+
+      setShowSubmissionModal(false);
+      setSubmissionFiles(null);
+      setSubmissionContent('');
+      setSelectedAssessment(null);
+
+      // Refresh course data to show updated submission status
+      await fetchCourseDetail();
+    } catch (error: any) {
+      console.error('Error submitting assessment:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to submit assessment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingAssessment(false);
+    }
+  };
+
+  const handleGradeSubmission = async () => {
+    if (!courseId || !selectedAssessment || !selectedSubmission) return;
+
+    try {
+      await courseService.gradeAssessmentSubmission(
+        courseId,
+        selectedAssessment._id,
+        selectedSubmission._id,
+        {
+          score: gradingScore,
+          feedback: gradingFeedback
+        }
+      );
+
+      toast({
+        title: "Success",
+        description: "Assessment graded successfully!",
+      });
+
+      setShowGradingModal(false);
+      setSelectedSubmission(null);
+      setGradingScore(0);
+      setGradingFeedback('');
+
+      // Refresh submissions
+      const submissionsResponse = await courseService.getAssessmentSubmissions(courseId, selectedAssessment._id);
+      setAssessmentSubmissions(submissionsResponse.data.submissions || []);
+    } catch (error: any) {
+      console.error('Error grading assessment:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to grade assessment",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openSubmissionModal = (assessment: any) => {
+    setSelectedAssessment(assessment);
+    setShowSubmissionModal(true);
+  };
+
+  const openGradingModal = (submission: any) => {
+    setSelectedSubmission(submission);
+    setGradingScore(submission.score || 0);
+    setGradingFeedback(submission.feedback || '');
+    setShowGradingModal(true);
+  };
+
 
   if (authLoading) {
     return (
@@ -1365,10 +1532,11 @@ const UnifiedCourseDetail = () => {
         setActiveTab(tab);
         localStorage.setItem(`courseTab_${courseId}`, tab);
       }} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="content">Content</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
+          <TabsTrigger value="assessments">Assessments</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           {isAdmin && <TabsTrigger value="batch">Batch</TabsTrigger>}
           {isAdmin && <TabsTrigger value="settings">Settings</TabsTrigger>}
@@ -1751,6 +1919,125 @@ const UnifiedCourseDetail = () => {
           </Card>
         </TabsContent>
 
+        {/* Assessments Tab */}
+        <TabsContent value="assessments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2">
+                  <FileText className="h-5 w-5" />
+                  <span>Course Assessments</span>
+                </CardTitle>
+                {(isInstructor || isAdmin) && (
+                  <Button size="sm" onClick={() => setShowAddForm('assessment')}>
+                    <Plus className="h-3 w-3 mr-1" />
+                    Create Assessment
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {course.assessments && course.assessments.length > 0 ? (
+                <div className="space-y-3">
+                  {course.assessments.map((assessment) => (
+                    <div key={assessment._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <FileText className="h-4 w-4 text-blue-600" />
+                        <div>
+                          <h4 className="font-medium">{assessment.title}</h4>
+                          <p className="text-sm text-muted-foreground">{assessment.description}</p>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <Badge variant="outline" className="text-xs">{assessment.type}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Due: {new Date(assessment.dueDate).toLocaleDateString()}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {assessment.totalPoints} points
+                            </span>
+                            {assessment.submission && (
+                              <Badge 
+                                variant={assessment.submission.status === 'graded' ? 'default' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {assessment.submission.status === 'graded' ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleViewAssessment(assessment._id)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        
+                        {/* Instructor/Admin controls */}
+                        {(isInstructor || isAdmin) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant={assessment.isPublished ? "outline" : "default"}
+                              onClick={() => handlePublishAssessment(assessment._id, !assessment.isPublished)}
+                              disabled={publishingAssessment === assessment._id}
+                            >
+                              {publishingAssessment === assessment._id ? (
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                              ) : (
+                                assessment.isPublished ? 'Unpublish' : 'Publish'
+                              )}
+                            </Button>
+                            <Badge variant={assessment.isPublished ? "default" : "secondary"} className="text-xs">
+                              {assessment.isPublished ? 'Published' : 'Draft'}
+                            </Badge>
+                          </>
+                        )}
+                        
+                        {/* Learner controls */}
+                        {!isInstructor && !isAdmin && !assessment.submission && assessment.isPublished && new Date(assessment.dueDate) > new Date() && (
+                          <Button 
+                            size="sm" 
+                            onClick={() => openSubmissionModal(assessment)}
+                          >
+                            Submit
+                          </Button>
+                        )}
+                        {!isInstructor && !isAdmin && !assessment.isPublished && (
+                          <Badge variant="secondary" className="text-xs">
+                            Not Published
+                          </Badge>
+                        )}
+                        {!isInstructor && !isAdmin && assessment.isPublished && new Date(assessment.dueDate) <= new Date() && !assessment.submission && (
+                          <Badge variant="destructive" className="text-xs">
+                            Past Due
+                          </Badge>
+                        )}
+                        {!isInstructor && !isAdmin && assessment.submission && assessment.submission.status === 'graded' && (
+                          <Badge variant="default" className="text-xs">
+                            Score: {assessment.submission.score}/{assessment.totalPoints}
+                          </Badge>
+                        )}
+                        {!isInstructor && !isAdmin && assessment.submission && assessment.submission.status !== 'graded' && (
+                          <Badge variant="secondary" className="text-xs">
+                            Submitted
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">No assessments available</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Sessions Tab - All Users */}
         <TabsContent value="sessions" className="space-y-6">
           {/* Show SessionsAndRecordings for all users */}
@@ -1884,7 +2171,7 @@ const UnifiedCourseDetail = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All Roles</SelectItem>
-                          <SelectItem value="student">Student</SelectItem>
+                          <SelectItem value="learner">Learner</SelectItem>
                           <SelectItem value="instructor">Instructor</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="super_admin">Super Admin</SelectItem>
@@ -3199,6 +3486,247 @@ const UnifiedCourseDetail = () => {
         variant="destructive"
         isLoading={isDeletingCourse}
       />
+
+      {/* Assessment Details Modal */}
+      <Dialog open={showAssessmentModal} onOpenChange={setShowAssessmentModal}>
+        <DialogContent className="max-w-4xl w-full">
+          <DialogHeader>
+            <DialogTitle>{selectedAssessment?.title}</DialogTitle>
+            <DialogDescription>
+              {selectedAssessment?.description}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedAssessment && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Type</Label>
+                  <p className="text-sm text-muted-foreground capitalize">{selectedAssessment.type}</p>
+                </div>
+                <div>
+                  <Label>Due Date</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(selectedAssessment.dueDate).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <Label>Total Points</Label>
+                  <p className="text-sm text-muted-foreground">{selectedAssessment.totalPoints}</p>
+                </div>
+                <div>
+                  <Label>Status</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedAssessment.isPublished ? 'Published' : 'Draft'}
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {selectedAssessment?.instructions && (
+              <div>
+                <Label>Instructions</Label>
+                <p className="text-sm text-muted-foreground mt-1">{selectedAssessment.instructions}</p>
+              </div>
+            )}
+
+            {/* Show submissions for instructors/admins */}
+            {(isInstructor || isAdmin) && assessmentSubmissions.length > 0 && (
+              <div>
+                <Label>Submissions ({assessmentSubmissions.length})</Label>
+                <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                  {assessmentSubmissions.map((submission) => (
+                    <div key={submission._id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">{submission.student.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Submitted: {new Date(submission.submittedAt).toLocaleString()}
+                        </p>
+                        {submission.isLate && (
+                          <Badge variant="destructive" className="text-xs">Late</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {submission.status === 'graded' ? (
+                          <Badge variant="default">
+                            {submission.score}/{submission.maxScore}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">Pending</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openGradingModal(submission)}
+                        >
+                          {submission.status === 'graded' ? 'Regrade' : 'Grade'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assessment Submission Modal */}
+      <Dialog open={showSubmissionModal} onOpenChange={setShowSubmissionModal}>
+        <DialogContent className="max-w-2xl w-full">
+          <DialogHeader>
+            <DialogTitle>Submit Assessment: {selectedAssessment?.title}</DialogTitle>
+            <DialogDescription>
+              Upload your files or provide text content for this assessment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="submissionFiles">Upload Files (Optional)</Label>
+              <Input
+                id="submissionFiles"
+                type="file"
+                multiple
+                accept="*/*"
+                onChange={(e) => setSubmissionFiles(e.target.files)}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                You can upload multiple files. Supported formats: PDF, DOC, DOCX, images, etc.
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="submissionContent">Text Content (Optional)</Label>
+              <Textarea
+                id="submissionContent"
+                value={submissionContent}
+                onChange={(e) => setSubmissionContent(e.target.value)}
+                placeholder="Enter your response or additional notes here..."
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+
+            {selectedAssessment && (
+              <div className="p-3 bg-muted/30 rounded-lg">
+                <p className="text-sm">
+                  <strong>Due Date:</strong> {new Date(selectedAssessment.dueDate).toLocaleString()}
+                </p>
+                <p className="text-sm">
+                  <strong>Total Points:</strong> {selectedAssessment.totalPoints}
+                </p>
+                {selectedAssessment.instructions && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium">Instructions:</p>
+                    <p className="text-sm text-muted-foreground">{selectedAssessment.instructions}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setShowSubmissionModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmitAssessment}
+              disabled={isSubmittingAssessment || (!submissionFiles && !submissionContent.trim())}
+            >
+              {isSubmittingAssessment ? 'Submitting...' : 'Submit Assessment'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assessment Grading Modal */}
+      <Dialog open={showGradingModal} onOpenChange={setShowGradingModal}>
+        <DialogContent className="max-w-2xl w-full">
+          <DialogHeader>
+            <DialogTitle>Grade Assessment Submission</DialogTitle>
+            <DialogDescription>
+              Grade the submission for {selectedSubmission?.student?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedSubmission && (
+              <>
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <p className="text-sm">
+                    <strong>Student:</strong> {selectedSubmission.student.name}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Submitted:</strong> {new Date(selectedSubmission.submittedAt).toLocaleString()}
+                  </p>
+                  {selectedSubmission.isLate && (
+                    <Badge variant="destructive" className="text-xs">Late Submission</Badge>
+                  )}
+                </div>
+
+                {selectedSubmission.files && selectedSubmission.files.length > 0 && (
+                  <div>
+                    <Label>Submitted Files</Label>
+                    <div className="space-y-2 mt-1">
+                      {selectedSubmission.files.map((file: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-2 border rounded">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="h-4 w-4" />
+                            <span className="text-sm">{file.originalName}</span>
+                          </div>
+                          <Button size="sm" variant="outline">
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedSubmission.content && (
+                  <div>
+                    <Label>Text Content</Label>
+                    <div className="p-3 border rounded-lg mt-1">
+                      <p className="text-sm whitespace-pre-wrap">{selectedSubmission.content}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label htmlFor="gradingScore">Score (out of {selectedAssessment?.totalPoints || 100})</Label>
+                  <Input
+                    id="gradingScore"
+                    type="number"
+                    min="0"
+                    max={selectedAssessment?.totalPoints || 100}
+                    value={gradingScore}
+                    onChange={(e) => setGradingScore(parseInt(e.target.value) || 0)}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="gradingFeedback">Feedback (Optional)</Label>
+                  <Textarea
+                    id="gradingFeedback"
+                    value={gradingFeedback}
+                    onChange={(e) => setGradingFeedback(e.target.value)}
+                    placeholder="Provide feedback for the student..."
+                    rows={4}
+                    className="mt-1"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setShowGradingModal(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleGradeSubmission}>
+              Submit Grade
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

@@ -206,7 +206,7 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
       await sessionService.endSession(sessionId);
       toast({
         title: "Success",
-        description: "Session ended successfully."
+        description: "Session ended successfully. Recording will be processed automatically and available shortly."
       });
       
       // Force immediate refresh of session data

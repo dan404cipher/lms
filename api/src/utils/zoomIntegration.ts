@@ -105,6 +105,18 @@ class ZoomIntegration {
       }
 
       console.log('Creating Zoom meeting with API...');
+      console.log('Meeting data being sent:', {
+        topic: meetingData.topic,
+        start_time: meetingData.start_time,
+        duration: meetingData.duration,
+        timezone: meetingData.timezone,
+        settings: {
+          auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
+          join_before_host: true,
+          waiting_room: false
+        }
+      });
+      
       const response = await axios.post(
         `${this.baseUrl}/users/me/meetings`,
         {
@@ -120,7 +132,7 @@ class ZoomIntegration {
             join_before_host: true,  // Allow students to join before instructor
             mute_upon_entry: true,
             waiting_room: false,     // Disable waiting room for easier access
-            auto_recording: 'local', // Use local recording (works with free plans)
+            auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
             recording_authentication: false, // Allow anyone to view recordings
             allow_multiple_devices: true,
             ...meetingData.settings
@@ -211,7 +223,92 @@ class ZoomIntegration {
 
       return response.data.recording_files || [];
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        console.log(`No recordings found for meeting ${meetingId} - this is normal if recording hasn't started or completed yet`);
+        return [];
+      }
       console.error('Error getting Zoom recordings:', error);
+      return [];
+    }
+  }
+
+  // Process and store recordings for a session
+  async processSessionRecordings(sessionId: string, meetingId: string): Promise<any[]> {
+    try {
+      console.log(`Processing recordings for session ${sessionId}, meeting ${meetingId}`);
+      
+      const recordings = await this.getMeetingRecordings(meetingId);
+      console.log(`Found ${recordings.length} recording files`);
+
+      if (recordings.length === 0) {
+        console.log('No recordings found yet. This is normal - Zoom recordings take 2-5 minutes to process.');
+        return [];
+      }
+
+      // Import Recording model here to avoid circular dependencies
+      const { Recording } = await import('../models/Recording');
+      const { Session } = await import('../models/Session');
+      
+      const session = await Session.findById(sessionId);
+      if (!session) {
+        throw new Error('Session not found');
+      }
+
+      const processedRecordings = [];
+
+      for (const recording of recordings) {
+        try {
+          // Check if recording already exists
+          const existingRecording = await Recording.findOne({ 
+            zoomRecordingId: recording.id 
+          });
+
+          if (existingRecording) {
+            console.log(`Recording ${recording.id} already exists, skipping...`);
+            processedRecordings.push(existingRecording);
+            continue;
+          }
+
+          // Calculate duration in seconds
+          const startTime = new Date(recording.recording_start);
+          const endTime = new Date(recording.recording_end);
+          const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+
+          // Create recording record
+          const recordingData = {
+            sessionId: session._id,
+            courseId: session.courseId,
+            zoomRecordingId: recording.id,
+            title: recording.topic || `Session Recording - ${session.title}`,
+            description: `Recording of ${session.title} session`,
+            recordingUrl: recording.play_url,
+            downloadUrl: recording.download_url,
+            duration: duration,
+            fileSize: recording.file_size || 0,
+            recordedAt: startTime,
+            isPublic: false,
+            isProcessed: true,
+            thumbnailUrl: recording.thumbnail_url
+          };
+
+          const newRecording = await Recording.create(recordingData);
+          processedRecordings.push(newRecording);
+          
+          console.log(`Created recording record: ${newRecording._id}`);
+        } catch (recordingError) {
+          console.error(`Error processing recording ${recording.id}:`, recordingError);
+        }
+      }
+
+      // Update session to mark as having recordings
+      if (processedRecordings.length > 0) {
+        await Session.findByIdAndUpdate(sessionId, { hasRecording: true });
+        console.log(`Updated session ${sessionId} to mark as having recordings`);
+      }
+
+      return processedRecordings;
+    } catch (error) {
+      console.error('Error processing session recordings:', error);
       return [];
     }
   }
@@ -249,10 +346,10 @@ class ZoomIntegration {
       settings: {
         host_video: true,
         participant_video: true,
-        join_before_host: false,
+        join_before_host: true,  // Allow students to join before instructor
         mute_upon_entry: true,
-        waiting_room: true,
-        auto_recording: 'cloud',
+        waiting_room: false,     // Disable waiting room for easier access
+        auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
         allow_multiple_devices: true,
         ...meetingData.settings
       }
@@ -291,8 +388,35 @@ class ZoomIntegration {
   }
 
   private async handleRecordingCompleted(payload: any): Promise<void> {
-    // Process and store recording information
-    console.log('Recording completed:', payload.object.id);
+    try {
+      console.log('Recording completed webhook received:', payload);
+      
+      const meetingId = payload.object.id;
+      const recordingId = payload.object.uuid;
+      
+      // Find the session by meeting ID
+      const { Session } = await import('../models/Session');
+      const session = await Session.findOne({ zoomMeetingId: meetingId });
+      
+      if (!session) {
+        console.log(`No session found for meeting ID: ${meetingId}`);
+        return;
+      }
+
+      console.log(`Processing recording for session: ${session._id}`);
+      
+      // Process the recordings
+      const processedRecordings = await this.processSessionRecordings((session._id as any).toString(), meetingId);
+      
+      if (processedRecordings.length > 0) {
+        console.log(`Successfully processed ${processedRecordings.length} recordings for session ${session._id}`);
+      } else {
+        console.log('No recordings were processed. This might be because recordings are still being processed by Zoom.');
+      }
+      
+    } catch (error) {
+      console.error('Error handling recording completed webhook:', error);
+    }
   }
 
   // Download recording from Zoom to local storage

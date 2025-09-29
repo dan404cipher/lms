@@ -350,6 +350,11 @@ class AdminService {
     return response.data;
   }
 
+  async publishAssessment(courseId: string, assessmentId: string, isPublished: boolean): Promise<AdminResponse<any>> {
+    const response = await adminAxios.put(`/admin/courses/${courseId}/assessments/${assessmentId}/publish`, { isPublished });
+    return response.data;
+  }
+
   async createAnnouncement(courseId: string, announcementData: {
     title: string;
     content: string;

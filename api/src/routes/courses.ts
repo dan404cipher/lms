@@ -20,10 +20,15 @@ import {
   uploadLessonContent,
   downloadCourseMaterial,
   downloadLessonContent,
-  markLessonComplete
+  markLessonComplete,
+  getCourseAssessments,
+  getAssessmentDetails,
+  submitAssessment,
+  getAssessmentSubmissions,
+  gradeAssessmentSubmission
 } from '../controllers/courseController';
 import { protect, authorize } from '../middleware/auth';
-import { upload, handleMulterError } from '../middleware/upload';
+import { upload, uploadAssessment, handleMulterError } from '../middleware/upload';
 
 const router = express.Router();
 
@@ -65,8 +70,14 @@ router.get('/:courseId/materials/:materialId/download', downloadCourseMaterial);
 router.get('/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download', downloadLessonContent);
 router.post('/:courseId/lessons/:lessonId/complete', markLessonComplete);
 
+// Assessment routes - All authenticated users (students, instructors, admins)
+router.get('/:courseId/assessments', getCourseAssessments);
+router.get('/:courseId/assessments/:assessmentId', getAssessmentDetails);
+
+// Assessment submission routes - Students only
+router.post('/:courseId/assessments/:assessmentId/submit', uploadAssessment.array('files', 10), handleMulterError, submitAssessment);
+
 // Protected routes - Instructor and Admin only
-router.use(protect);
 router.use(authorize('instructor', 'admin', 'super_admin'));
 
 // Course CRUD
@@ -88,5 +99,9 @@ router.post('/:courseId/modules/:moduleId/lessons', lessonValidation, createLess
 router.put('/:courseId/modules/:moduleId/lessons/:lessonId', lessonValidation, updateLesson);
 router.delete('/:courseId/modules/:moduleId/lessons/:lessonId', deleteLesson);
 router.post('/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
+
+// Assessment grading routes - Instructors and Admins only
+router.get('/:courseId/assessments/:assessmentId/submissions', getAssessmentSubmissions);
+router.put('/:courseId/assessments/:assessmentId/submissions/:submissionId/grade', gradeAssessmentSubmission);
 
 export default router;

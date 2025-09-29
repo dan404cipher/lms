@@ -132,6 +132,11 @@ const instructorService = {
     return response.data;
   },
 
+  async publishAssessment(courseId: string, assessmentId: string, isPublished: boolean) {
+    const response = await instructorAxios.put(`/instructor/courses/${courseId}/assessments/${assessmentId}/publish`, { isPublished });
+    return response.data;
+  },
+
   async deleteAssessment(courseId: string, assessmentId: string) {
     const response = await instructorAxios.delete(`/instructor/courses/${courseId}/assessments/${assessmentId}`);
     return response.data;
@@ -338,6 +343,11 @@ const instructorService = {
 
   async updateGeneralAssessment(assessmentId: string, assessmentData: any) {
     const response = await instructorAxios.put(`/instructor/assessments/${assessmentId}`, assessmentData);
+    return response.data;
+  },
+
+  async publishGeneralAssessment(assessmentId: string, isPublished: boolean) {
+    const response = await instructorAxios.put(`/instructor/assessments/${assessmentId}/publish`, { isPublished });
     return response.data;
   },
 

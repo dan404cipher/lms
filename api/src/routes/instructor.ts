@@ -28,6 +28,7 @@ import {
   getAssessments,
   createAssessment,
   updateAssessment,
+  publishAssessment,
   deleteAssessment,
   getAssessmentSubmissions,
   getAllMaterials,
@@ -110,12 +111,14 @@ router.delete('/courses/:courseId/sessions/:sessionId', deleteSession);
 router.get('/assessments', getAssessments);
 router.post('/assessments', createAssessment);
 router.put('/assessments/:assessmentId', updateAssessment);
+router.put('/assessments/:assessmentId/publish', publishAssessment);
 router.delete('/assessments/:assessmentId', deleteAssessment);
 router.get('/assessments/:assessmentId/submissions', getAssessmentSubmissions);
 
 // Course-specific Assessment Management
 router.post('/courses/:courseId/assessments', createAssessment);
 router.put('/courses/:courseId/assessments/:assessmentId', updateAssessment);
+router.put('/courses/:courseId/assessments/:assessmentId/publish', publishAssessment);
 router.delete('/courses/:courseId/assessments/:assessmentId', deleteAssessment);
 
 // Material Management (General)
