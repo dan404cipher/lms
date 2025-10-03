@@ -2269,205 +2269,26 @@ const UnifiedCourseDetail = () => {
                           </div>
                         ) : (
                           <div className="space-y-4">
-                            {/* Debug info */}
-                            <div className="p-2 bg-yellow-100 rounded text-xs">
-                              <p><strong>Video URL:</strong> {selectedRecording.recordingUrl}</p>
-                              <p><strong>Title:</strong> {selectedRecording.title}</p>
-                              <p><strong>Duration:</strong> {selectedRecording.duration}s</p>
-                              <div className="mt-2 space-x-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    const video = document.querySelector('video') as HTMLVideoElement;
-                                    if (video) {
-                                      console.log('🎬 Manual play attempt:', {
-                                        src: video.src,
-                                        readyState: video.readyState,
-                                        networkState: video.networkState
-                                      });
-                                      video.play().then(() => {
-                                        console.log('🎬 Video play successful');
-                                      }).catch((error) => {
-                                        console.error('🎬 Video play failed:', error);
-                                      });
-                                    }
-                                  }}
-                                >
-                                  Force Play
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => window.open(selectedRecording.recordingUrl, '_blank')}
-                                >
-                                  Open in New Tab
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    const video = document.querySelector('video') as HTMLVideoElement;
-                                    if (video) {
-                                      console.log('🎬 Video debug info:', {
-                                        src: video.src,
-                                        currentSrc: video.currentSrc,
-                                        readyState: video.readyState,
-                                        networkState: video.networkState,
-                                        paused: video.paused,
-                                        duration: video.duration,
-                                        currentTime: video.currentTime,
-                                        buffered: video.buffered.length > 0 ? video.buffered.end(0) : 0,
-                                        videoWidth: video.videoWidth,
-                                        videoHeight: video.videoHeight
-                                      });
-                                    }
-                                  }}
-                                >
-                                  Debug Video
-                                </Button>
-                              </div>
-                            </div>
                           <div className="relative">
-                            {!videoReady && !videoLoading && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg z-10">
-                                <Button
-                                  onClick={() => {
-                                    const video = document.querySelector('video') as HTMLVideoElement;
-                                    if (video) {
-                                      video.play().catch(console.error);
-                                    }
-                                  }}
-                                  className="flex items-center space-x-2"
-                                >
-                                  <Play className="h-4 w-4" />
-                                  <span>Play Video</span>
-                                </Button>
-                              </div>
-                            )}
                           <video
                           key={selectedRecording._id}
                           controls
-                          className="w-full h-auto max-h-[70vh] rounded-lg shadow-sm cursor-pointer"
+                          className="w-full aspect-video rounded-lg shadow-lg"
                           preload="metadata"
-                          autoPlay={false}
                           playsInline
-                          muted={false}
                           onLoadStart={() => {
-                            const cleanPath = selectedRecording.localFilePath?.replace(/^\/recordings\//, '');
-                            const apiBaseUrl = import.meta.env.VITE_API_URL.replace('/api', '');
-                            const actualSrc = selectedRecording.localFilePath && cleanPath
-                              ? `${apiBaseUrl}/recordings/${cleanPath}`
-                              : (selectedRecording.playUrl || selectedRecording.recordingUrl);
-                            console.log('🎬 Video loading started:', {
-                              actualSrc,
-                              url: selectedRecording.recordingUrl,
-                              localFilePath: selectedRecording.localFilePath,
-                              title: selectedRecording.title,
-                              duration: selectedRecording.duration
-                            });
                             setVideoLoading(true);
                             setVideoError(null);
                             setVideoReady(false);
                           }}
-                          onLoadedData={() => {
-                            console.log('🎬 Video element loadedData triggered');
-                          }}
-                          onCanPlay={(e) => {
-                            const video = e.target as HTMLVideoElement;
-                            console.log('🎬 Video can play:', {
-                              url: selectedRecording.recordingUrl,
-                              readyState: video.readyState,
-                              networkState: video.networkState
-                            });
+                          onLoadedMetadata={() => {
                             setVideoLoading(false);
                             setVideoReady(true);
-                            
-                            // Try to play immediately when ready
-                            video.play().then(() => {
-                              console.log('🎬 Video started playing successfully');
-                            }).catch((error) => {
-                              console.log('🎬 Video play failed:', error);
-                            });
-                          }}
-                          onClick={(e) => {
-                            const video = e.target as HTMLVideoElement;
-                            console.log('🎬 Video clicked, current state:', {
-                              paused: video.paused,
-                              readyState: video.readyState,
-                              networkState: video.networkState,
-                              src: video.src
-                            });
-                            if (video.paused) {
-                              video.play().catch(console.error);
-                            } else {
-                              video.pause();
-                            }
-                          }}
-                          onLoadedMetadata={(e) => {
-                            const video = e.target as HTMLVideoElement;
-                            console.log('🎬 Video metadata loaded:', {
-                              duration: video.duration,
-                              videoWidth: video.videoWidth,
-                              videoHeight: video.videoHeight,
-                              readyState: video.readyState,
-                              networkState: video.networkState,
-                              src: video.src,
-                              currentSrc: video.currentSrc,
-                              localFilePath: selectedRecording.localFilePath
-                            });
-                            
-                            // Check if the video loaded successfully
-                            if (video.duration > 0 && video.videoWidth > 0 && video.videoHeight > 0) {
-                              setVideoLoading(false);
-                              setVideoReady(true);
-                            } else {
-                              setVideoError("Video file appears to be invalid or corrupted.");
-                              setVideoLoading(false);
-                              setVideoReady(false);
-                              toast({
-                                title: "Video Error",
-                                description: "Video file appears to be invalid or corrupted. Please try downloading it instead.",
-                                variant: "destructive"
-                              });
-                            }
-                          }}
-                          onCanPlayThrough={() => {
-                            console.log('Video can play through:', selectedRecording.recordingUrl);
-                            setVideoLoading(false);
-                            setVideoReady(true);
-                          }}
-                          onWaiting={() => {
-                            console.log('🎬 Video waiting for data - trying to play');
-                            setVideoLoading(true);
-                            // Try to play the video when it's waiting
-                            const video = document.querySelector('video') as HTMLVideoElement;
-                            if (video && video.readyState >= 2) {
-                              video.play().catch(console.error);
-                            }
-                          }}
-                          onStalled={() => {
-                            console.log('Video stalled');
-                            setVideoLoading(true);
                           }}
                           onError={(e) => {
-                            console.error('Video error:', e);
                             const target = e.target as HTMLVideoElement | HTMLSourceElement;
-                            
-                            // Get video element and source
                             const video = target.tagName === 'VIDEO' ? target as HTMLVideoElement : (target.parentElement as HTMLVideoElement);
-                            const source = target.tagName === 'SOURCE' ? target as HTMLSourceElement : video.querySelector('source');
                             
-                            console.error('Video error details:', {
-                              videoError: video?.error,
-                              videoSrc: video?.src,
-                              videoCurrentSrc: video?.currentSrc,
-                              sourceSrc: source?.src,
-                              targetTag: target.tagName,
-                              networkState: video?.networkState,
-                              readyState: video?.readyState
-                            });
-                            
-                            // Hide video and show fallback
                             if (video) video.style.display = 'none';
                             const fallback = document.getElementById('video-fallback');
                             if (fallback) fallback.style.display = 'block';
@@ -2477,17 +2298,14 @@ const UnifiedCourseDetail = () => {
                           }}
                         >
                           {(() => {
-                            // Use local file if available
                             let videoSrc = selectedRecording.recordingUrl;
                             
                             if (selectedRecording.localFilePath) {
                               const cleanPath = selectedRecording.localFilePath?.replace(/^\/recordings\//, '');
-                              // Use the API base URL (without /api suffix) for recordings
                               const apiBaseUrl = import.meta.env.VITE_API_URL.replace('/api', '');
                               videoSrc = cleanPath ? `${apiBaseUrl}/recordings/${cleanPath}` : selectedRecording.recordingUrl;
                             }
                             
-                            console.log('🎥 Video source:', videoSrc);
                             return <source src={videoSrc} type="video/mp4" />;
                           })()}
                           Your browser does not support the video tag.
