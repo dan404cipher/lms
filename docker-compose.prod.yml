@@ -1,0 +1,103 @@
+# Docker Compose for LMS Production Deployment
+
+services:
+  # LMS API Backend
+  lms-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.prod
+    container_name: lms-api-prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      MONGODB_URI: mongodb+srv://vaccel:PlHUbhJ3iUnbMOHU@v-accel-suites.rqyglx.mongodb.net/LMS?retryWrites=true&w=majority&appName=v-accel-suites
+      JWT_SECRET: lms-super-secure-jwt-production-key-2024-v1-axessupskill
+      JWT_EXPIRES_IN: 24h
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGIN: https://axessupskill.v-accel.ai
+      FRONTEND_URL: https://axessupskill.v-accel.ai
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: danush@v-accel.ai
+      SMTP_PASS: sbhp qdzz jche xgmh
+      SMTP_FROM_NAME: AxessUpskill LMS
+      ZOOM_API_KEY: dVbYBzngSZupwDzKihTO3g
+      ZOOM_API_SECRET: 9QRZNiYMS7KGSCODzeEFzg
+      ZOOM_ACCOUNT_ID: 7ZeA5qvAR2q7CyFYYu1t2A
+      ZOOM_CLIENT_ID: kTxRR0cyQZKpUIybo8Pmww
+      ZOOM_CLIENT_SECRET: 9kdBGP1Q7pT74ytpviypTRMaG437Xfwy
+      ZOOM_REDIRECT_URI: https://axessupskill.v-accel.ai/api/auth/zoom/callback
+      UPLOADS_PATH: ./uploads
+      MAX_FILE_SIZE_MB: 0
+      MAX_IMAGE_SIZE_MB: 0
+      RATE_LIMIT_ENABLED: true
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      LOG_LEVEL: info
+      API_DOCS_ENABLED: false
+      BCRYPT_ROUNDS: 12
+      MAX_FILE_SIZE: 0
+      REDIS_URL: redis://localhost:6379
+    volumes:
+      - lms_uploads:/app/uploads
+      - lms_recordings:/app/recordings
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # LMS Frontend Client
+  lms-client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.prod
+    container_name: lms-client-prod
+    restart: unless-stopped
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx Reverse Proxy for LMS
+  lms-nginx:
+    image: nginx:alpine
+    container_name: lms-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "8080:80"  # Different port to avoid conflict with hire-accel
+      - "8443:443"  # Different port to avoid conflict with hire-accel
+    volumes:
+      - ./nginx-lms-production.conf:/etc/nginx/conf.d/default.conf
+      - ./ssl:/etc/nginx/ssl:ro
+      - lms_uploads:/var/www/uploads:ro
+      - lms_recordings:/var/www/recordings:ro
+    depends_on:
+      - lms-api
+      - lms-client
+    networks:
+      - lms-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  lms_uploads:
+    driver: local
+  lms_recordings:
+    driver: local
+
+networks:
+  lms-network:
+    driver: bridge
