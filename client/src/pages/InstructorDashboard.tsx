@@ -252,7 +252,12 @@ const InstructorDashboard = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       {getSessionStatusBadge(session.status)}
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => navigate(`/instructor/courses/${session.courseId}`)}
+                        title="View Session"
+                      >
                         <Eye className="h-3 w-3" />
                       </Button>
                     </div>
@@ -312,7 +317,12 @@ const InstructorDashboard = () => {
                       <Badge variant="outline" className="text-xs">
                         {assessment.type}
                       </Badge>
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => navigate(`/instructor/courses/${assessment.courseId}`)}
+                        title="View Assessment"
+                      >
                         <Eye className="h-3 w-3" />
                       </Button>
                     </div>
@@ -374,7 +384,12 @@ const InstructorDashboard = () => {
                     <Badge variant="outline" className="text-xs">
                       {material.type}
                     </Badge>
-                    <Button size="sm" variant="outline">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => navigate(`/instructor/courses/${material.courseId}`)}
+                      title="View Material"
+                    >
                       <Eye className="h-3 w-3" />
                     </Button>
                   </div>

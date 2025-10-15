@@ -261,7 +261,12 @@ const Dashboard = () => {
                       <div className="flex items-center space-x-2">
                         {getStatusBadge(activity.status)}
                         {activity.hasRecording && (
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => navigate('/courses')}
+                            title="Watch Recording"
+                          >
                             <Play className="h-3 w-3 mr-1" />
                             Watch
                           </Button>
