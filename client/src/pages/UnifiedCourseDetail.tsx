@@ -308,6 +308,10 @@ const UnifiedCourseDetail = () => {
   const [fileViewerUrl, setFileViewerUrl] = useState<string>('');
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [submissionFiles, setSubmissionFiles] = useState<FileList | null>(null);
+  
+  // Material viewer state
+  const [showMaterialViewer, setShowMaterialViewer] = useState(false);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [submissionContent, setSubmissionContent] = useState('');
   const [isSubmittingAssessment, setIsSubmittingAssessment] = useState(false);
   const [assessmentSubmissions, setAssessmentSubmissions] = useState<any[]>([]);
@@ -910,6 +914,11 @@ const UnifiedCourseDetail = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewMaterial = async (material: Material) => {
+    setSelectedMaterial(material);
+    setShowMaterialViewer(true);
   };
 
   const handleDownloadLessonContent = async (file: any, moduleId: string, lessonId: string) => {
@@ -2316,6 +2325,9 @@ const UnifiedCourseDetail = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <Badge variant="outline" className="text-xs">{material.type}</Badge>
+                        <Button size="sm" variant="outline" onClick={() => handleViewMaterial(material)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => handleDownloadMaterial(material)}>
                           <Download className="h-4 w-4" />
                         </Button>
@@ -5124,6 +5136,88 @@ const UnifiedCourseDetail = () => {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+          <DialogPrimitive.Close className="absolute right-2 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
+
+      {/* Material Viewer Modal */}
+      <Dialog open={showMaterialViewer} onOpenChange={setShowMaterialViewer}>
+        <DialogPortal>
+          <DialogOverlay className="bg-transparent" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-[9999] w-[95vw] max-w-7xl h-[90vh] translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg p-0 flex flex-col">
+          <DialogHeader className="px-6 py-3 border-b flex-shrink-0 flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="text-lg font-semibold">{selectedMaterial?.title || 'Material Viewer'}</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Viewing material: {selectedMaterial?.title}
+              </DialogDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => selectedMaterial && handleDownloadMaterial(selectedMaterial)}
+              className="mr-3"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download
+            </Button>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden bg-white min-h-0">
+            {selectedMaterial && (
+              <>
+                {selectedMaterial.type === 'video' ? (
+                  <video 
+                    src={selectedMaterial.fileUrl}
+                    controls
+                    className="w-full h-full object-contain bg-black"
+                  />
+                ) : selectedMaterial.type === 'pdf' ? (
+                  <iframe
+                    src={`${selectedMaterial.fileUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                    className="w-full h-full border-0 bg-white"
+                    title={selectedMaterial.title}
+                    style={{ 
+                      backgroundColor: 'white',
+                      display: 'block'
+                    }}
+                    onError={() => {
+                      console.error('Failed to load PDF:', selectedMaterial.fileUrl);
+                    }}
+                  />
+                ) : selectedMaterial.type === 'document' ? (
+                  <iframe
+                    src={selectedMaterial.fileUrl}
+                    className="w-full h-full border-0 bg-white"
+                    title={selectedMaterial.title}
+                    onError={() => {
+                      console.error('Failed to load document:', selectedMaterial.fileUrl);
+                    }}
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center bg-white">
+                    <div className="text-center">
+                      <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                      <p className="text-lg font-medium mb-2">Preview not available</p>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        This material type cannot be previewed in the browser.
+                      </p>
+                      <Button 
+                        onClick={() => selectedMaterial && handleDownloadMaterial(selectedMaterial)}
+                        variant="outline"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download to view
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <DialogPrimitive.Close className="absolute right-2 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">

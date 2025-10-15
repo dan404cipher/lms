@@ -448,7 +448,7 @@ const LessonViewer = () => {
                                       if (fallback) fallback.style.display = 'block';
                                     }}
                                   >
-                                    <source src={`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`} type={currentFile.type} />
+                                    <source src={currentFile.url} type={currentFile.type} />
                                     Your browser does not support the video tag.
                                   </video>
                                   <div className="hidden text-center py-8" id="video-fallback">
@@ -457,7 +457,7 @@ const LessonViewer = () => {
                                     <Button 
                                       variant="outline" 
                                       className="mt-2"
-                                      onClick={() => window.open(`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`, '_blank')}
+                                      onClick={() => window.open(currentFile.url, '_blank')}
                                     >
                                       Open Video
                                     </Button>
@@ -466,7 +466,7 @@ const LessonViewer = () => {
                               ) : currentFile.type.startsWith('image/') ? (
                                 <div className="text-center">
                                   <img
-                                    src={`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`}
+                                    src={currentFile.url}
                                     alt={currentFile.name}
                                     className="max-w-full h-auto max-h-[70vh] rounded mx-auto shadow-sm"
                                                                        onError={(e) => {
@@ -482,7 +482,7 @@ const LessonViewer = () => {
                                     <Button 
                                       variant="outline" 
                                       className="mt-2"
-                                      onClick={() => window.open(`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`, '_blank')}
+                                      onClick={() => window.open(currentFile.url, '_blank')}
                                     >
                                       Open Image
                                     </Button>
@@ -499,7 +499,7 @@ const LessonViewer = () => {
                                        <div className="flex gap-2 justify-center">
                                          <Button 
                                            variant="outline"
-                                           onClick={() => window.open(`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`, '_blank')}
+                                           onClick={() => window.open(currentFile.url, '_blank')}
                                          >
                                            <Download className="h-4 w-4 mr-2" />
                                            Open PDF
@@ -580,7 +580,7 @@ const LessonViewer = () => {
                                               
                                               <div className="flex gap-3">
                                                 <Button 
-                                                  onClick={() => window.open(`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`, '_blank')}
+                                                  onClick={() => window.open(currentFile.url, '_blank')}
                                                   className="flex items-center gap-2"
                                                 >
                                                   <Download className="h-4 w-4" />
@@ -601,7 +601,7 @@ const LessonViewer = () => {
                                             </div>
                                           ) : (
                                             <iframe
-                                              src={`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`}
+                                              src={currentFile.url}
                                               className="w-full h-[70vh] border-0"
                                               title={currentFile.name}
                                               onLoad={() => {
@@ -625,7 +625,7 @@ const LessonViewer = () => {
                                   <p className="text-xs text-muted-foreground mb-4">{currentFile.name}</p>
                                   <Button 
                                     variant="outline"
-                                           onClick={() => window.open(`${(import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '')}${currentFile.url}`, '_blank')}
+                                           onClick={() => window.open(currentFile.url, '_blank')}
                                   >
                                     <Download className="h-4 w-4 mr-2" />
                                     Open Document
