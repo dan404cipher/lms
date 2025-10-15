@@ -57,7 +57,7 @@ VITE_ENABLE_HTTPS_REDIRECT=true
 VITE_SESSION_TIMEOUT=3600000
 
 # Zoom Integration
-VITE_ZOOM_CLIENT_ID=kTxRR0cyQZKpUIybo8Pmww
+VITE_ZOOM_CLIENT_ID=${ZOOM_CLIENT_ID:-your_zoom_client_id}
 VITE_ZOOM_REDIRECT_URI=https://axessupskill.v-accel.ai/auth/zoom/callback
 
 # Socket.IO Configuration

@@ -23,7 +23,12 @@ const User = mongoose.model('User', userSchema);
 async function createAdminUser() {
   try {
     // Connect to MongoDB
-    const mongoUri = process.env.MONGO_URI || 'mongodb+srv://prod:z5eJcHBfDAmn7QKU@prod-1.i5p8bt.mongodb.net/lms?retryWrites=true&w=majority&appName=lms';
+    const mongoUri = process.env.MONGO_URI;
+    
+    if (!mongoUri) {
+      console.error('❌ MONGO_URI environment variable is required');
+      process.exit(1);
+    }
     
     console.log('Connecting to MongoDB...');
     await mongoose.connect(mongoUri);
