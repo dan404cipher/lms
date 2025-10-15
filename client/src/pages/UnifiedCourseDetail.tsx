@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +43,7 @@ import {
 } from "lucide-react";
 import courseService from "@/services/courseService";
 import instructorService from "@/services/instructorService";
-import adminService, { Course } from "@/services/adminService";
+import adminService from "@/services/adminService";
 import ScheduleSessionModal from "@/components/ScheduleSessionModal";
 import SessionsAndRecordings from "@/components/SessionsAndRecordings";
 import ConfirmationModal from "@/components/ConfirmationModal";
@@ -300,6 +301,12 @@ const UnifiedCourseDetail = () => {
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showSubmissionModal, setShowSubmissionModal] = useState(false);
   const [showViewSubmissionModal, setShowViewSubmissionModal] = useState(false);
+  
+  // File viewer modal state
+  const [showFileViewerModal, setShowFileViewerModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [fileViewerUrl, setFileViewerUrl] = useState<string>('');
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [submissionFiles, setSubmissionFiles] = useState<FileList | null>(null);
   const [submissionContent, setSubmissionContent] = useState('');
   const [isSubmittingAssessment, setIsSubmittingAssessment] = useState(false);
@@ -309,6 +316,21 @@ const UnifiedCourseDetail = () => {
   const [gradingScore, setGradingScore] = useState<number>(0);
   const [gradingFeedback, setGradingFeedback] = useState('');
   const [publishingAssessment, setPublishingAssessment] = useState<string | null>(null);
+
+  // Assessment creation state
+  const [showCreateAssessmentModal, setShowCreateAssessmentModal] = useState(false);
+  const [assessmentFormData, setAssessmentFormData] = useState({
+    title: '',
+    description: '',
+    type: 'quiz',
+    dueDate: '',
+    totalPoints: 100,
+    instructions: '',
+    timeLimit: '',
+    isPublished: false
+  });
+  const [assessmentAttachments, setAssessmentAttachments] = useState<File[]>([]);
+  const [isCreatingAssessment, setIsCreatingAssessment] = useState(false);
 
   const isInstructor = user?.role === 'instructor';
   const isAdmin = user?.role === 'admin';
@@ -1443,21 +1465,117 @@ const UnifiedCourseDetail = () => {
   const handleViewAssessment = async (assessmentId: string) => {
     if (!courseId) return;
 
-    try {
-      const response = await courseService.getAssessmentDetails(courseId, assessmentId);
-      setSelectedAssessment(response.data.assessment);
-      setShowAssessmentModal(true);
+    // Check if user is authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to view assessment details",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      // If user is instructor/admin, also fetch submissions
-      if (isInstructor || isAdmin) {
-        const submissionsResponse = await courseService.getAssessmentSubmissions(courseId, assessmentId);
-        setAssessmentSubmissions(submissionsResponse.data.submissions || []);
+    try {
+      console.log('Fetching assessment details for:', assessmentId, 'in course:', courseId);
+      console.log('User token exists:', !!token);
+      const response = await courseService.getAssessmentDetails(courseId, assessmentId);
+      console.log('Assessment details response:', response);
+      
+      // Check if response is valid and has the expected structure
+      if (response && response.data && response.data.assessment) {
+        console.log('Assessment data received:', response.data.assessment);
+        console.log('Assessment attachments:', response.data.assessment.attachments);
+        setSelectedAssessment(response.data.assessment);
+        setShowAssessmentModal(true);
+        console.log('Assessment modal should be open now');
+
+        // If user is instructor/admin, also fetch submissions
+        if (isInstructor || isAdmin) {
+          try {
+            const submissionsResponse = await courseService.getAssessmentSubmissions(courseId, assessmentId);
+            setAssessmentSubmissions(submissionsResponse.data?.submissions || []);
+          } catch (submissionError) {
+            console.error('Error fetching submissions:', submissionError);
+            // Don't show error for submissions, just log it
+          }
+        }
+      } else {
+        console.error('Invalid response structure:', response);
+        toast({
+          title: "Error",
+          description: "Invalid assessment data received from server",
+          variant: "destructive",
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching assessment details:', error);
+      
+      // Check if it's an authentication error
+      if (error.response?.status === 401) {
+        toast({
+          title: "Authentication Error",
+          description: "Please log in again to view assessment details",
+          variant: "destructive",
+        });
+      } else if (error.response?.status === 403) {
+        toast({
+          title: "Access Denied",
+          description: "You don't have permission to view this assessment",
+          variant: "destructive",
+        });
+      } else if (error.response?.status === 404) {
+        toast({
+          title: "Assessment Not Found",
+          description: "The requested assessment could not be found",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.response?.data?.message || "Failed to fetch assessment details",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleViewFileInModal = async (file: any, type: 'attachment' | 'submission' = 'attachment') => {
+    if (!courseId || !selectedAssessment) return;
+
+    setIsLoadingFile(true);
+    setSelectedFile(file);
+    setShowFileViewerModal(true);
+
+    try {
+      let blob: Blob;
+      
+      if (type === 'attachment') {
+        blob = await courseService.downloadAssessmentAttachment(courseId, selectedAssessment._id, file.filename);
+      } else if (type === 'submission' && selectedSubmission) {
+        // For submission files, we need to use a different approach
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/submissions/${selectedSubmission._id}/files/${file.filename}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        blob = await response.blob();
+      } else {
+        setIsLoadingFile(false);
+        return;
+      }
+
+      // Create a blob URL for viewing
+      const blobUrl = URL.createObjectURL(blob);
+      
+      setFileViewerUrl(blobUrl);
+      setIsLoadingFile(false);
+    } catch (error) {
+      console.error('Error loading file for viewing:', error);
+      setIsLoadingFile(false);
       toast({
         title: "Error",
-        description: "Failed to fetch assessment details",
+        description: "Failed to load file for viewing",
         variant: "destructive",
       });
     }
@@ -1514,11 +1632,14 @@ const UnifiedCourseDetail = () => {
     }
   };
 
-  const handleDownloadAttachment = async (attachment: any) => {
-    if (!courseId || !selectedAssessment) return;
+  const handleDownloadAttachment = async (attachment: any, assessmentId?: string) => {
+    if (!courseId) return;
+    
+    const targetAssessmentId = assessmentId || selectedAssessment?._id;
+    if (!targetAssessmentId) return;
 
     try {
-      const blob = await courseService.downloadAssessmentAttachment(courseId, selectedAssessment._id, attachment.filename);
+      const blob = await courseService.downloadAssessmentAttachment(courseId, targetAssessmentId, attachment.filename);
       
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1604,6 +1725,123 @@ const UnifiedCourseDetail = () => {
     setGradingScore(submission.score || 0);
     setGradingFeedback(submission.feedback || '');
     setShowGradingModal(true);
+  };
+
+  // Assessment creation functions
+  const handleCreateAssessment = async () => {
+    if (!courseId) return;
+
+    if (!assessmentFormData.title.trim() || !assessmentFormData.description.trim()) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsCreatingAssessment(true);
+
+      // Create assessment first
+      let response;
+      if (isAdmin) {
+        response = await adminService.createAssessment(courseId, {
+          title: assessmentFormData.title,
+          description: assessmentFormData.description,
+          type: assessmentFormData.type,
+          dueDate: new Date(assessmentFormData.dueDate).toISOString(),
+          totalPoints: parseInt(assessmentFormData.totalPoints.toString()),
+          instructions: assessmentFormData.instructions,
+          timeLimit: assessmentFormData.timeLimit ? parseInt(assessmentFormData.timeLimit.toString()) : undefined,
+          isPublished: assessmentFormData.isPublished
+        });
+      } else {
+        response = await instructorService.createAssessment(courseId, {
+          title: assessmentFormData.title,
+          description: assessmentFormData.description,
+          type: assessmentFormData.type,
+          dueDate: new Date(assessmentFormData.dueDate).toISOString(),
+          totalPoints: parseInt(assessmentFormData.totalPoints.toString()),
+          instructions: assessmentFormData.instructions,
+          timeLimit: assessmentFormData.timeLimit ? parseInt(assessmentFormData.timeLimit.toString()) : undefined,
+          isPublished: assessmentFormData.isPublished
+        });
+      }
+
+      if (response.success && response.data?.assessment) {
+        const assessmentId = response.data.assessment._id;
+
+        // Upload attachments if any
+        if (assessmentAttachments.length > 0) {
+          for (const file of assessmentAttachments) {
+            try {
+              if (isAdmin) {
+                await adminService.uploadAssessmentAttachment(courseId, assessmentId, file);
+              } else {
+                await instructorService.uploadCourseAssessmentAttachment(courseId, assessmentId, file);
+              }
+            } catch (attachmentError) {
+              console.error('Error uploading attachment:', attachmentError);
+              toast({
+                title: "Warning",
+                description: `Failed to upload ${file.name}`,
+                variant: "destructive",
+              });
+            }
+          }
+        }
+
+        toast({
+          title: "Success",
+          description: "Assessment created successfully!",
+        });
+
+        // Reset form and close modal
+        setAssessmentFormData({
+          title: '',
+          description: '',
+          type: 'quiz',
+          dueDate: '',
+          totalPoints: 100,
+          instructions: '',
+          timeLimit: '',
+          isPublished: false
+        });
+        setAssessmentAttachments([]);
+        setShowCreateAssessmentModal(false);
+
+        // Refresh course data
+        await fetchCourseDetail();
+      } else {
+        throw new Error(response.message || 'Failed to create assessment');
+      }
+    } catch (error: any) {
+      console.error('Error creating assessment:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create assessment",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingAssessment(false);
+    }
+  };
+
+  const handleAssessmentFormChange = (field: string, value: any) => {
+    setAssessmentFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleAttachmentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      setAssessmentAttachments(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAssessmentAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
 
@@ -2109,10 +2347,13 @@ const UnifiedCourseDetail = () => {
         <TabsContent value="assessments" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileText className="h-5 w-5" />
-                <span>Course Assessments</span>
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2">
+                  <FileText className="h-5 w-5" />
+                  <span>Course Assessments</span>
+                </CardTitle>
+               
+              </div>
             </CardHeader>
             <CardContent>
               {course.assessments && course.assessments.length > 0 ? (
@@ -2151,14 +2392,35 @@ const UnifiedCourseDetail = () => {
                               {assessment.attachments && assessment.attachments.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                   {assessment.attachments.map((attachment: any, index: number) => (
-                                    <div key={index} className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded text-xs hover:bg-muted transition-colors cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleViewAssessment(assessment._id);
-                                      }}
-                                    >
+                                    <div key={index} className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded text-xs hover:bg-muted transition-colors">
                                       <Paperclip className="h-3 w-3" />
                                       <span className="truncate max-w-[200px]">{attachment.originalName}</span>
+                                      <div className="flex items-center gap-1 ml-1">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-4 w-4 p-0 hover:bg-muted-foreground/20"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleViewAssessment(assessment._id);
+                                          }}
+                                          title="View Assessment"
+                                        >
+                                          <Eye className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          className="h-4 w-4 p-0 hover:bg-muted-foreground/20"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDownloadAttachment(attachment, assessment._id);
+                                          }}
+                                          title="Download Attachment"
+                                        >
+                                          <Download className="h-3 w-3" />
+                                        </Button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
@@ -2206,19 +2468,38 @@ const UnifiedCourseDetail = () => {
                         
                         {/* Submit button - only if not submitted, published, and before due date */}
                         {!isInstructor && !isAdmin && !assessment.submission && assessment.isPublished && new Date(assessment.dueDate) > new Date() && (
-                          <Button 
-                            size="sm" 
-                            onClick={() => openSubmissionModal(assessment)}
-                          >
-                            Submit
-                          </Button>
+                          <div className="flex items-center space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleViewAssessment(assessment._id)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              onClick={() => openSubmissionModal(assessment)}
+                            >
+                              Submit
+                            </Button>
+                          </div>
                         )}
                         
                         {/* Past due - no submission */}
                         {!isInstructor && !isAdmin && assessment.isPublished && new Date(assessment.dueDate) <= new Date() && !assessment.submission && (
-                          <Badge variant="destructive" className="text-xs">
-                            Past Due
-                          </Badge>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="destructive" className="text-xs">
+                              Past Due
+                            </Badge>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleViewAssessment(assessment._id)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View Assessment
+                            </Button>
+                          </div>
                         )}
                         
                         {/* Submitted assessments - unified view */}
@@ -2236,9 +2517,17 @@ const UnifiedCourseDetail = () => {
                             <Button 
                               size="sm" 
                               variant="outline"
+                              onClick={() => handleViewAssessment(assessment._id)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View Assessment
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
                               onClick={() => openViewSubmissionModal(assessment)}
                             >
-                              View
+                              View Submission
                             </Button>
                             {/* Resubmit button - only if not graded and before due date */}
                             {assessment.submission.status !== 'graded' && new Date(assessment.dueDate) > new Date() && (
@@ -3926,7 +4215,7 @@ const UnifiedCourseDetail = () => {
             )}
 
             {/* Assessment Attachments */}
-            {selectedAssessment?.attachments && selectedAssessment.attachments.length > 0 && (
+            {selectedAssessment?.attachments && selectedAssessment.attachments.length > 0 ? (
               <div>
                 <Label>Attachments ({selectedAssessment.attachments.length})</Label>
                 <div className="space-y-3 mt-2">
@@ -3937,10 +4226,14 @@ const UnifiedCourseDetail = () => {
                         {isImage && (
                           <div className="mb-3">
                             <img 
-                              src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}`}
+                              src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}/download`}
                               alt={attachment.originalName}
                               className="max-w-full h-auto rounded-lg border"
                               style={{ maxHeight: '400px' }}
+                              onError={(e) => {
+                                console.error('Image load error:', e);
+                                e.currentTarget.style.display = 'none';
+                              }}
                             />
                           </div>
                         )}
@@ -3954,19 +4247,34 @@ const UnifiedCourseDetail = () => {
                               </p>
                             </div>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDownloadAttachment(attachment)}
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </Button>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleViewFileInModal(attachment, 'attachment')}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadAttachment(attachment)}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Download
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div>
+                <Label>Attachments</Label>
+                <p className="text-sm text-muted-foreground mt-1">No attachments available for this assessment.</p>
               </div>
             )}
 
@@ -3994,6 +4302,17 @@ const UnifiedCourseDetail = () => {
                         ) : (
                           <Badge variant="secondary">Pending</Badge>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            // Open grading modal to view files
+                            openGradingModal(submission);
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View Files
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -4038,7 +4357,7 @@ const UnifiedCourseDetail = () => {
                       {isImage && (
                         <div className="mb-3">
                           <img 
-                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}`}
+                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}/download`}
                             alt={attachment.originalName}
                             className="max-w-full h-auto rounded-lg border"
                             style={{ maxHeight: '300px' }}
@@ -4055,14 +4374,24 @@ const UnifiedCourseDetail = () => {
                             </p>
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDownloadAttachment(attachment)}
-                        >
-                          <Download className="h-4 w-4 mr-1" />
-                          Download
-                        </Button>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewFileInModal(attachment, 'attachment')}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadAttachment(attachment)}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Download
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     );
@@ -4166,36 +4495,56 @@ const UnifiedCourseDetail = () => {
                             <FileText className="h-4 w-4" />
                             <span className="text-sm">{file.originalName}</span>
                           </div>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => {
-                              try {
-                                // Create download link
-                                const link = document.createElement('a');
-                                link.href = file.url;
-                                link.download = file.originalName;
-                                link.target = '_blank';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                
-                                toast({
-                                  title: "Download Started",
-                                  description: `Downloading ${file.originalName}`,
-                                });
-                              } catch (error) {
-                                console.error('Error downloading file:', error);
-                                toast({
-                                  title: "Download Failed",
-                                  description: `Failed to download ${file.originalName}`,
-                                  variant: "destructive",
-                                });
-                              }
-                            }}
-                          >
-                            <Download className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handleViewFileInModal(file, 'submission')}
+                            >
+                              <Eye className="h-3 w-3" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/submissions/${selectedSubmission._id}/files/${file.filename}`, {
+                                    headers: {
+                                      'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                    }
+                                  });
+                                  
+                                  if (!response.ok) {
+                                    throw new Error('Failed to download file');
+                                  }
+                                  
+                                  const blob = await response.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const link = document.createElement('a');
+                                  link.href = url;
+                                  link.download = file.originalName;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(link);
+                                  
+                                  toast({
+                                    title: "Download Started",
+                                    description: `Downloading ${file.originalName}`,
+                                  });
+                                } catch (error) {
+                                  console.error('Error downloading file:', error);
+                                  toast({
+                                    title: "Download Failed",
+                                    description: `Failed to download ${file.originalName}`,
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -4313,7 +4662,7 @@ const UnifiedCourseDetail = () => {
                           {isImage && (
                             <div className="mb-3">
                               <img 
-                                src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}`}
+                                src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}/download`}
                                 alt={attachment.originalName}
                                 className="max-w-full h-auto rounded-lg border"
                                 style={{ maxHeight: '300px' }}
@@ -4330,15 +4679,24 @@ const UnifiedCourseDetail = () => {
                                 </p>
                               </div>
                             </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDownloadAttachment(attachment)}
-                              className="flex-shrink-0"
-                            >
-                              <Download className="h-4 w-4 mr-1" />
-                              Download
-                            </Button>
+                            <div className="flex items-center space-x-2 flex-shrink-0">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleViewFileInModal(attachment, 'attachment')}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadAttachment(attachment)}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
                           </div>
                         </div>
                         );
@@ -4496,6 +4854,284 @@ const UnifiedCourseDetail = () => {
             )}
           </div>
         </DialogContent>
+      </Dialog>
+
+      {/* Create Assessment Modal */}
+      <Dialog open={showCreateAssessmentModal} onOpenChange={setShowCreateAssessmentModal}>
+        <DialogContent className="max-w-2xl w-full">
+          <DialogHeader>
+            <DialogTitle>Create New Assessment</DialogTitle>
+            <DialogDescription>
+              Create a new assessment for this course with optional attachments.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="title">Title *</Label>
+                <Input
+                  id="title"
+                  value={assessmentFormData.title}
+                  onChange={(e) => handleAssessmentFormChange('title', e.target.value)}
+                  placeholder="Assessment title"
+                />
+              </div>
+              <div>
+                <Label htmlFor="type">Type *</Label>
+                <Select value={assessmentFormData.type} onValueChange={(value) => handleAssessmentFormChange('type', value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quiz">Quiz</SelectItem>
+                    <SelectItem value="assignment">Assignment</SelectItem>
+                    <SelectItem value="exam">Exam</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="description">Description *</Label>
+              <Textarea
+                id="description"
+                value={assessmentFormData.description}
+                onChange={(e) => handleAssessmentFormChange('description', e.target.value)}
+                placeholder="Assessment description"
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="dueDate">Due Date *</Label>
+                <Input
+                  id="dueDate"
+                  type="datetime-local"
+                  value={assessmentFormData.dueDate}
+                  onChange={(e) => handleAssessmentFormChange('dueDate', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="totalPoints">Total Points *</Label>
+                <Input
+                  id="totalPoints"
+                  type="number"
+                  value={assessmentFormData.totalPoints}
+                  onChange={(e) => handleAssessmentFormChange('totalPoints', parseInt(e.target.value) || 100)}
+                  min="1"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="instructions">Instructions</Label>
+              <Textarea
+                id="instructions"
+                value={assessmentFormData.instructions}
+                onChange={(e) => handleAssessmentFormChange('instructions', e.target.value)}
+                placeholder="Assessment instructions"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="timeLimit">Time Limit (minutes)</Label>
+              <Input
+                id="timeLimit"
+                type="number"
+                value={assessmentFormData.timeLimit}
+                onChange={(e) => handleAssessmentFormChange('timeLimit', e.target.value)}
+                placeholder="Optional time limit"
+                min="1"
+              />
+            </div>
+
+            <div>
+              <Label>Attachments</Label>
+              <div className="space-y-3">
+                <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleAttachmentUpload}
+                    className="hidden"
+                    id="attachment-upload"
+                  />
+                  <label htmlFor="attachment-upload" className="cursor-pointer">
+                    <Paperclip className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload attachments or drag and drop files here
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Supports any file type, up to 10GB per file
+                    </p>
+                  </label>
+                </div>
+                
+                {assessmentAttachments.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Selected Files:</p>
+                    {assessmentAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <Paperclip className="h-4 w-4" />
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeAttachment(index)}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isPublished"
+                checked={assessmentFormData.isPublished}
+                onChange={(e) => handleAssessmentFormChange('isPublished', e.target.checked)}
+                className="rounded"
+              />
+              <Label htmlFor="isPublished">Publish immediately</Label>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setShowCreateAssessmentModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateAssessment} disabled={isCreatingAssessment}>
+                {isCreatingAssessment ? "Creating..." : "Create Assessment"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Viewer Modal */}
+      <Dialog open={showFileViewerModal} onOpenChange={(open) => {
+        setShowFileViewerModal(open);
+        if (!open) {
+          // Clean up blob URL to prevent memory leaks
+          if (fileViewerUrl) {
+            URL.revokeObjectURL(fileViewerUrl);
+            setFileViewerUrl('');
+          }
+          setIsLoadingFile(false);
+          setSelectedFile(null);
+        }
+      }}>
+        <DialogPortal>
+          <DialogOverlay className="bg-transparent" />
+          <DialogPrimitive.Content className="fixed left-[50%] top-[50%] z-[9999] w-[95vw] max-w-7xl h-[90vh] translate-x-[-50%] translate-y-[-50%] border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] rounded-lg p-0 flex flex-col">
+          <DialogHeader className="px-6 py-3 border-b flex-shrink-0 flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="text-lg font-semibold">{selectedFile?.originalName || 'File Viewer'}</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                Viewing file: {selectedFile?.originalName}
+              </DialogDescription>
+            </div>
+            {selectedFile?.mimeType === 'application/pdf' && fileViewerUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const a = document.createElement('a');
+                  a.href = fileViewerUrl;
+                  a.download = selectedFile.originalName;
+                  a.click();
+                }}
+                className="mr-3"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+            )}
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden bg-white min-h-0">
+            {isLoadingFile ? (
+              <div className="h-full flex items-center justify-center bg-white">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-sm text-muted-foreground">Loading file...</p>
+                </div>
+              </div>
+            ) : selectedFile && fileViewerUrl && (
+              <div className="h-full w-full bg-white">
+                {selectedFile.mimeType?.startsWith('image/') ? (
+                  <div className="h-full flex items-center justify-center bg-white">
+                    <img 
+                      src={fileViewerUrl}
+                      alt={selectedFile.originalName}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                ) : selectedFile.mimeType?.startsWith('video/') ? (
+                  <div className="h-full flex items-center justify-center bg-white">
+                    <video 
+                      src={fileViewerUrl}
+                      controls
+                      className="max-h-full max-w-full"
+                    />
+                  </div>
+                ) : selectedFile.mimeType === 'application/pdf' ? (
+                  <iframe
+                    src={`${fileViewerUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
+                    className="w-full h-full border-0 bg-white"
+                    title={selectedFile.originalName}
+                    style={{ 
+                      backgroundColor: 'white',
+                      display: 'block'
+                    }}
+                    onError={() => {
+                      console.log('PDF iframe failed to load');
+                    }}
+                  />
+                ) : selectedFile.mimeType?.startsWith('text/') ? (
+                  <div className="h-full overflow-auto bg-white">
+                    <iframe
+                      src={fileViewerUrl}
+                      className="w-full h-full border-0 bg-white"
+                      title={selectedFile.originalName}
+                    />
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center bg-white">
+                    <div className="text-center">
+                      <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-lg font-medium mb-2">Preview not available</p>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        This file type cannot be previewed in the browser.
+                      </p>
+                      <Button 
+                        onClick={() => window.open(fileViewerUrl, '_blank')}
+                        variant="outline"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download to view
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogPrimitive.Close className="absolute right-2 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+          </DialogPrimitive.Content>
+        </DialogPortal>
       </Dialog>
 
     </div>

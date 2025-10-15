@@ -13,7 +13,7 @@ import SystemSettings from '../models/SystemSettings';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { Announcement } from '../models/Announcement';
-import { uploadFileLocally } from '../utils/fileUpload';
+import { uploadFileLocally, uploadAssessmentAttachment } from '../utils/fileUpload';
 import ActivityLogger from '../utils/activityLogger';
 import { getNotificationService } from '../config/socket';
 import fs from 'fs';
@@ -1684,6 +1684,186 @@ export const uploadMaterial = async (req: AuthRequest, res: Response, next: Next
 // @desc    Upload lesson content (Admin only)
 // @route   POST /api/admin/courses/:courseId/modules/:moduleId/lessons/:lessonId/content
 // @access  Private (Admin)
+// @desc    Upload assessment attachment (Admin only)
+// @route   POST /api/admin/courses/:courseId/assessments/:assessmentId/attachments
+// @access  Private (Admin)
+export const uploadAssessmentAttachmentFile = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId } = req.params;
+    const userId = req.user._id;
+
+    console.log('Admin uploadAssessmentAttachmentFile - Starting upload process');
+    console.log('Admin uploadAssessmentAttachmentFile - Params:', { courseId, assessmentId, userId });
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if assessment exists and belongs to the course
+    const assessment = await Assessment.findOne({ _id: assessmentId, courseId });
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or does not belong to this course'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    console.log('Admin uploadAssessmentAttachmentFile - File received:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
+    // Upload file locally
+    const uploadResult = await uploadAssessmentAttachment(req.file);
+    
+    // Add attachment to assessment
+    const attachment = {
+      filename: uploadResult.Key.split('/').pop() || req.file.originalname,
+      originalName: req.file.originalname,
+      url: uploadResult.Location,
+      size: req.file.size,
+      mimeType: req.file.mimetype
+    };
+
+    await Assessment.findByIdAndUpdate(assessmentId, {
+      $push: { attachments: attachment }
+    });
+
+    console.log('Admin uploadAssessmentAttachmentFile - Attachment uploaded successfully:', attachment);
+
+    res.status(201).json({
+      success: true,
+      data: { attachment }
+    });
+  } catch (error) {
+    console.error('Admin uploadAssessmentAttachmentFile - Error:', error);
+    next(error);
+  }
+};
+
+// @desc    Download assessment attachment (Admin only)
+// @route   GET /api/admin/courses/:courseId/assessments/:assessmentId/attachments/:attachmentId/download
+// @access  Private (Admin)
+export const downloadAssessmentAttachment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId, attachmentId } = req.params;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if assessment exists and belongs to the course
+    const assessment = await Assessment.findOne({ _id: assessmentId, courseId });
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or does not belong to this course'
+      });
+    }
+
+    // Find the attachment
+    const attachment = assessment.attachments?.find(att => att.filename === attachmentId);
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment not found'
+      });
+    }
+
+    // Construct file path
+    const filePath = path.join(__dirname, '../../uploads/assessment-attachments', attachment.filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Set appropriate headers
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    res.setHeader('Content-Type', attachment.mimeType);
+
+    // Send file
+    res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete assessment attachment (Admin only)
+// @route   DELETE /api/admin/courses/:courseId/assessments/:assessmentId/attachments/:attachmentId
+// @access  Private (Admin)
+export const deleteAssessmentAttachment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId, attachmentId } = req.params;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if assessment exists and belongs to the course
+    const assessment = await Assessment.findOne({ _id: assessmentId, courseId });
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or does not belong to this course'
+      });
+    }
+
+    // Find the attachment
+    const attachment = assessment.attachments?.find(att => att.filename === attachmentId);
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment not found'
+      });
+    }
+
+    // Remove attachment from assessment
+    await Assessment.findByIdAndUpdate(assessmentId, {
+      $pull: { attachments: { filename: attachmentId } }
+    });
+
+    // Delete file from server
+    const filePath = path.join(__dirname, '../../uploads/assessment-attachments', attachment.filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({
+      success: true,
+      message: 'Attachment deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const uploadLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     console.log('uploadLessonContent - Starting upload process');

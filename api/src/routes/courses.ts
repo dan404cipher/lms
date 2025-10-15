@@ -79,6 +79,10 @@ router.get('/:courseId/assessments/:assessmentId', getAssessmentDetails);
 // Assessment submission routes - Students only
 router.post('/:courseId/assessments/:assessmentId/submit', uploadAssessment.array('files', 10), handleMulterError, submitAssessment);
 
+// Assessment attachment download routes - All authenticated users (students, instructors, admins)
+router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId/download', downloadAssessmentAttachment);
+router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId', downloadAssessmentAttachment); // Serve inline for images
+
 // Protected routes - Instructor and Admin only
 router.use(authorize('instructor', 'admin', 'super_admin'));
 
@@ -105,8 +109,6 @@ router.post('/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.sin
 // Assessment grading routes - Instructors and Admins only
 router.get('/:courseId/assessments/:assessmentId/submissions', getAssessmentSubmissions);
 router.put('/:courseId/assessments/:assessmentId/submissions/:submissionId/grade', gradeAssessmentSubmission);
-router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId/download', downloadAssessmentAttachment);
-router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId', downloadAssessmentAttachment); // Serve inline for images
 router.get('/:courseId/assessments/:assessmentId/submissions/:submissionId/files/:filename', downloadSubmittedFile);
 
 export default router;

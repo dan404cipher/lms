@@ -1960,6 +1960,14 @@ export const downloadAssessmentAttachment = async (req: AuthRequest, res: Respon
       });
     }
 
+    // For learners, check if assessment is published
+    if (userRole === 'learner' && !assessment.isPublished) {
+      return res.status(403).json({
+        success: false,
+        message: 'Assessment is not published yet'
+      });
+    }
+
     // Find the specific attachment
     const attachment = assessment.attachments?.find(att => att.filename === attachmentId);
     if (!attachment) {

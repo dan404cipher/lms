@@ -1,12 +1,18 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 // Create axios instance with auth interceptor
 const courseAxios = axios.create({ baseURL: API_URL });
 
 courseAxios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
+  console.log('API Request:', {
+    url: config.url,
+    method: config.method,
+    hasToken: !!token,
+    tokenLength: token?.length || 0
+  });
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -14,8 +20,21 @@ courseAxios.interceptors.request.use((config) => {
 });
 
 courseAxios.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('API Response Success:', {
+      url: response.config.url,
+      status: response.status,
+      dataType: typeof response.data
+    });
+    return response;
+  },
   async (error) => {
+    console.log('API Response Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message,
+      dataType: typeof error.response?.data
+    });
     if (error.response?.status === 401) {
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
@@ -106,7 +125,9 @@ class CourseService {
   }
 
   async getAssessmentDetails(courseId: string, assessmentId: string) {
-    const response = await courseAxios.get(`/courses/${courseId}/assessments/${assessmentId}`);
+    const url = `/courses/${courseId}/assessments/${assessmentId}`;
+    console.log('Making API call to:', `${API_URL}${url}`);
+    const response = await courseAxios.get(url);
     return response.data;
   }
 

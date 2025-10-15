@@ -1,7 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
 import { protect, authorize } from '../middleware/auth';
-import { upload, handleMulterError } from '../middleware/upload';
+import { upload, uploadAssessmentAttachment, handleMulterError } from '../middleware/upload';
 import {
   getAllUsers,
   getUserById,
@@ -27,6 +27,9 @@ import {
   downloadMaterial,
   uploadLessonContent,
   downloadLessonContent,
+  uploadAssessmentAttachmentFile,
+  downloadAssessmentAttachment,
+  deleteAssessmentAttachment,
   getSystemStats,
   getSystemHealth,
   getAnalytics,
@@ -164,6 +167,11 @@ router.put('/courses/:courseId/assessments/:assessmentId/publish', publishAssess
 router.post('/courses/:courseId/announcements', createAnnouncement);
 router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);
 router.get('/courses/:courseId/materials/:materialId/download', downloadMaterial);
+
+// Assessment File Management (Admin only)
+router.post('/courses/:courseId/assessments/:assessmentId/attachments', uploadAssessmentAttachment.single('attachment'), handleMulterError, uploadAssessmentAttachmentFile);
+router.get('/courses/:courseId/assessments/:assessmentId/attachments/:attachmentId/download', downloadAssessmentAttachment);
+router.delete('/courses/:courseId/assessments/:assessmentId/attachments/:attachmentId', deleteAssessmentAttachment);
 router.delete('/courses/:courseId/materials/:materialId', deleteMaterial);
 router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 router.get('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download', downloadLessonContent);

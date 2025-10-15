@@ -345,6 +345,9 @@ class AdminService {
     type: string;
     dueDate: string;
     totalPoints: number;
+    instructions?: string;
+    timeLimit?: number;
+    isPublished?: boolean;
     instructor?: string; // Add instructor field
   }): Promise<AdminResponse<any>> {
     const response = await adminAxios.post(`/admin/courses/${courseId}/assessments`, assessmentData);
@@ -384,6 +387,31 @@ class AdminService {
     const response = await adminAxios.get(`/admin/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content/${fileId}/download`, {
       responseType: 'blob'
     });
+    return response.data;
+  }
+
+  // Assessment Attachment Management
+  async uploadAssessmentAttachment(courseId: string, assessmentId: string, file: File): Promise<AdminResponse<any>> {
+    const formData = new FormData();
+    formData.append('attachment', file);
+    
+    const response = await adminAxios.post(`/admin/courses/${courseId}/assessments/${assessmentId}/attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
+  async downloadAssessmentAttachment(courseId: string, assessmentId: string, attachmentId: string): Promise<Blob> {
+    const response = await adminAxios.get(`/admin/courses/${courseId}/assessments/${assessmentId}/attachments/${attachmentId}/download`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
+
+  async deleteAssessmentAttachment(courseId: string, assessmentId: string, attachmentId: string): Promise<AdminResponse<any>> {
+    const response = await adminAxios.delete(`/admin/courses/${courseId}/assessments/${assessmentId}/attachments/${attachmentId}`);
     return response.data;
   }
 
