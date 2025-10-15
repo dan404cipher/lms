@@ -271,7 +271,22 @@ const UnifiedCourseDetail = () => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
   
+  // Pagination state for all users
+  const [usersPagination, setUsersPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0
+  });
+
+  // Pagination state for enrolled students
+  const [enrolledPagination, setEnrolledPagination] = useState({
+    page: 1,
+    limit: 10,
+  });
+  
   // Filter states
+  const [showFilters, setShowFilters] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [enrollmentFilter, setEnrollmentFilter] = useState<string>('all');
@@ -383,6 +398,13 @@ const UnifiedCourseDetail = () => {
   // Get filtered enrolled students
   const filteredEnrolledStudents = getFilteredAndSortedUsers(enrolledStudents, true);
 
+  // Paginate enrolled students
+  const enrolledTotalPages = Math.ceil(filteredEnrolledStudents.length / enrolledPagination.limit);
+  const paginatedEnrolledStudents = filteredEnrolledStudents.slice(
+    (enrolledPagination.page - 1) * enrolledPagination.limit,
+    enrolledPagination.page * enrolledPagination.limit
+  );
+
   // Get filtered all users (excluding already enrolled)
   const filteredAllUsers = getFilteredAndSortedUsers(
     allUsers.filter(user => !enrolledStudents.some(enrolled => enrolled._id === user._id))
@@ -396,6 +418,12 @@ const UnifiedCourseDetail = () => {
     setEnrollmentFilter('all');
     setSortBy('name');
     setSortOrder('asc');
+    setEnrolledPagination({ page: 1, limit: 10 });
+  };
+
+  // Pagination handlers for enrolled students
+  const handleEnrolledPageChange = (newPage: number) => {
+    setEnrolledPagination(prev => ({ ...prev, page: newPage }));
   };
 
   // Function to get button text and action based on active tab
@@ -407,6 +435,8 @@ const UnifiedCourseDetail = () => {
         return { text: 'Upload Material', action: 'material' };
       case 'sessions':
         return { text: 'Schedule Session', action: 'session' };
+      case 'assessments':
+        return { text: 'Create Assessment', action: 'assessment' };
       default:
         return { text: 'Add Module', action: 'module' };
     }
@@ -491,12 +521,23 @@ const UnifiedCourseDetail = () => {
   }, [isAdmin]);
 
   // Fetch all users for adding to batch
-  const fetchAllUsers = async () => {
+  const fetchAllUsers = async (page: number = 1, limit: number = 10) => {
     if (!isAdmin) return;
 
     try {
-      const response = await adminService.getAllUsers();
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+      });
+      
+      const response = await adminService.getAllUsers(params);
       setAllUsers(response.data.users || []);
+      setUsersPagination(response.data.pagination || {
+        page: 1,
+        limit: 10,
+        total: 0,
+        pages: 0
+      });
     } catch (error) {
       console.error('Error fetching all users:', error);
     }
@@ -748,6 +789,11 @@ const UnifiedCourseDetail = () => {
       fetchEnrolledStudents();
     }
   }, [course, isAdmin, isInstructor, courseId]);
+
+  // Reset enrolled pagination when filters change
+  useEffect(() => {
+    setEnrolledPagination(prev => ({ ...prev, page: 1 }));
+  }, [searchTerm, roleFilter, statusFilter, enrollmentFilter, sortBy, sortOrder]);
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules(prev =>
@@ -1018,12 +1064,25 @@ const UnifiedCourseDetail = () => {
           });
           break;
         case 'assessment':
+          const instructorId = user?._id || user?.id;
+          console.log('Creating assessment with instructor ID:', instructorId, 'User object:', user);
+          
+          if (!instructorId) {
+            toast({
+              title: "Error",
+              description: "Unable to identify instructor. Please refresh and try again.",
+              variant: "destructive",
+            });
+            return;
+          }
+          
           const assessmentData = {
             title: formData.title,
             description: formData.description,
             type: formData.type,
             dueDate: formData.dueDate,
-            totalPoints: formData.totalPoints
+            totalPoints: formData.totalPoints,
+            instructor: instructorId // Add instructor ID (handle both _id and id from API)
           };
           
           // Create the assessment first
@@ -1619,6 +1678,17 @@ const UnifiedCourseDetail = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Search & Filters Toggle for Batch Tab - Admin Only */}
+            {isAdmin && activeTab === 'batch' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+              >
+                <Search className="h-4 w-4 mr-2" />
+                {showFilters ? 'Hide Filters' : 'Show Filters'}
+              </Button>
+            )}
 
             {(isInstructor || isAdmin) && activeTab !== 'overview' && (
               <Button size="sm" onClick={() => addButtonAction === 'session' ? setIsScheduleModalOpen(true) : setShowAddForm(addButtonAction)}>
@@ -1630,11 +1700,13 @@ const UnifiedCourseDetail = () => {
           </div>
         </div>
 
-        {/* Progress Bar for Students */}
-        {!isInstructor && !isAdmin && course.progress && (
+        {/* Progress Bar - Show for everyone with progress data */}
+        {course.progress && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Course Progress</span>
+              <span className="text-sm font-medium">
+                {isInstructor || isAdmin ? 'My Course Progress' : 'Course Progress'}
+              </span>
               <span className="text-sm text-muted-foreground">{course.progress.percentage}%</span>
             </div>
             <Progress value={course.progress.percentage} className="h-2" />
@@ -1861,13 +1933,8 @@ const UnifiedCourseDetail = () => {
                               key={lesson._id}
                               className="flex items-center justify-between p-2 border rounded bg-background hover:bg-muted/50 transition-colors cursor-pointer"
                               onClick={() => {
-                                // For learners, mark lesson as complete when clicked
-                                if (!isInstructor && !isAdmin) {
-                                  handleLessonClick(lesson._id);
-                                } else {
-                                  // For instructors/admins, navigate to lesson detail
-                                  navigate(`/courses/${courseId}/lessons/${lesson._id}`);
-                                }
+                                // Navigate to lesson viewer for all users
+                                navigate(`/courses/${courseId}/lessons/${lesson._id}`);
                               }}
                             >
                               <div className="flex items-center space-x-2">
@@ -2042,18 +2109,10 @@ const UnifiedCourseDetail = () => {
         <TabsContent value="assessments" className="space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center space-x-2">
-                  <FileText className="h-5 w-5" />
-                  <span>Course Assessments</span>
-                </CardTitle>
-                {(isInstructor || isAdmin) && (
-                  <Button size="sm" onClick={() => setShowAddForm('assessment')}>
-                    <Plus className="h-3 w-3 mr-1" />
-                    Create Assessment
-                  </Button>
-                )}
-              </div>
+              <CardTitle className="flex items-center space-x-2">
+                <FileText className="h-5 w-5" />
+                <span>Course Assessments</span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {course.assessments && course.assessments.length > 0 ? (
@@ -2066,29 +2125,43 @@ const UnifiedCourseDetail = () => {
                           <div>
                             <h4 className="font-medium">{assessment.title}</h4>
                             <p className="text-sm text-muted-foreground">{assessment.description}</p>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <Badge variant="outline" className="text-xs">{assessment.type}</Badge>
-                              <span className="text-xs text-muted-foreground">
-                                Due: {new Date(assessment.dueDate).toLocaleDateString()}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {assessment.totalPoints} points
-                              </span>
+                            <div className="space-y-2 mt-2">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs text-muted-foreground">
+                                  Due: {new Date(assessment.dueDate).toLocaleDateString()}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {assessment.totalPoints} points
+                                </span>
+                                {(isInstructor || isAdmin) && assessment.isPublished && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {assessment.submissionsCount || assessment.submissionCount || 0} Submissions
+                                  </Badge>
+                                )}
+                                {assessment.submission && (
+                                  <Badge 
+                                    variant={assessment.submission.status === 'graded' ? 'default' : 'secondary'}
+                                    className="text-xs"
+                                  >
+                                    {assessment.submission.status === 'graded' ? 'Graded' : 'Submitted'}
+                                  </Badge>
+                                )}
+                              </div>
+                              {/* Show attachments list */}
                               {assessment.attachments && assessment.attachments.length > 0 && (
-                                <div className="flex items-center space-x-1">
-                                  <Paperclip className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-xs text-muted-foreground">
-                                    {assessment.attachments.length} file{assessment.attachments.length > 1 ? 's' : ''}
-                                  </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {assessment.attachments.map((attachment: any, index: number) => (
+                                    <div key={index} className="flex items-center gap-1 px-2 py-1 bg-muted/50 rounded text-xs hover:bg-muted transition-colors cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewAssessment(assessment._id);
+                                      }}
+                                    >
+                                      <Paperclip className="h-3 w-3" />
+                                      <span className="truncate max-w-[200px]">{attachment.originalName}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
-                              {assessment.submission && (
-                                <Badge 
-                                  variant={assessment.submission.status === 'graded' ? 'default' : 'secondary'}
-                                  className="text-xs"
-                                >
-                                  {assessment.submission.status === 'graded' ? 'Graded' : 'Submitted'}
-                                </Badge>
                               )}
                             </div>
                           </div>
@@ -2109,9 +2182,11 @@ const UnifiedCourseDetail = () => {
                                 assessment.isPublished ? 'Unpublish' : 'Publish'
                               )}
                             </Button>
-                            <Badge variant={assessment.isPublished ? "default" : "secondary"} className="text-xs">
-                              {assessment.isPublished ? 'Published' : 'Draft'}
-                            </Badge>
+                            {!assessment.isPublished && (
+                              <Badge variant="secondary" className="text-xs">
+                                Draft
+                              </Badge>
+                            )}
                             <Button 
                               size="sm" 
                               variant="outline" 
@@ -2390,46 +2465,25 @@ const UnifiedCourseDetail = () => {
 
         {/* Batch Tab - Admin and Instructor */}
         {(isAdmin || isInstructor) && (
-          <TabsContent value="batch" className="space-y-6">
+          <TabsContent value="batch" className="space-y-2">
             <Card>
-              <CardHeader>
-                {isAdmin && (
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Course User Management</span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">
-                        {enrolledStudents.length} enrolled
-                      </Badge>
-                      <Badge variant="secondary">
-                        {allUsers.length} total users
-                      </Badge>
-                    </div>
-                  </CardTitle>
-                )}
-                <CardDescription>
-                  {isAdmin 
-                    ? 'Manage course enrollments, search and filter users by role, status, and other criteria.'
-                    : ''
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {/* Global Search and Filters - Admin Only */}
-                {isAdmin && (
-                  <div className="space-y-4 mb-6 p-4 border rounded-lg bg-muted/30">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-medium">Search & Filters</h4>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={clearAllFilters}
-                        className="text-xs"
-                      >
-                        Clear All
-                      </Button>
-                    </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {isAdmin && showFilters && (
+                      <div className="space-y-4 mb-3 p-4 border rounded-lg bg-muted/30">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-medium">Search & Filters</h4>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={clearAllFilters}
+                            className="text-xs"
+                          >
+                            Clear All
+                          </Button>
+                        </div>
+                      
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Search */}
                     <div className="space-y-2">
                       <Label htmlFor="search" className="text-xs">Search</Label>
@@ -2504,46 +2558,57 @@ const UnifiedCourseDetail = () => {
                         </Button>
                       </div>
                     </div>
-                  </div>
-                </div>
+                        </div>
+                      </div>
                 )}
 
-                <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : ''} gap-6`}>
+                <div className={`grid grid-cols-1 ${isAdmin ? 'lg:grid-cols-2' : ''} gap-4`}>
                   {/* Left Column - Users in Course */}
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">{isAdmin ? 'Enrolled Users' : 'Course Learners'}</h3>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">
                           {isAdmin ? `${filteredEnrolledStudents.length} of ${enrolledStudents.length}` : `${enrolledStudents.length} learners`}
                         </Badge>
-                        {isAdmin && enrolledStudents.length > 0 && (
-                          <div className="space-y-1">
-                            <Label htmlFor="enrollmentFilter" className="text-xs">Enrollment Status</Label>
-                            <Select value={enrollmentFilter} onValueChange={setEnrollmentFilter}>
-                              <SelectTrigger className="text-xs h-8 w-32">
-                                <SelectValue placeholder="All" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="dropped">Dropped</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
                       </div>
                     </div>
+
+                    {/* Pagination Controls for Enrolled Students */}
+                    {isAdmin && filteredEnrolledStudents.length > 0 && (
+                      <div className="flex items-center justify-between py-2">
+                        <div className="text-sm text-muted-foreground">
+                          Page {enrolledPagination.page} of {enrolledTotalPages || 1}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEnrolledPageChange(enrolledPagination.page - 1)}
+                            disabled={enrolledPagination.page <= 1}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEnrolledPageChange(enrolledPagination.page + 1)}
+                            disabled={enrolledPagination.page >= enrolledTotalPages}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {batchLoading ? (
                       <div className="text-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                         <p className="mt-2 text-sm text-muted-foreground">Loading course users...</p>
                       </div>
-                    ) : (isAdmin ? filteredEnrolledStudents : enrolledStudents).length > 0 ? (
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {(isAdmin ? filteredEnrolledStudents : enrolledStudents).map((user) => (
+                    ) : (isAdmin ? paginatedEnrolledStudents : enrolledStudents).length > 0 ? (
+                      <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                        {(isAdmin ? paginatedEnrolledStudents : enrolledStudents).map((user) => (
                           <div key={user._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                             <div className="flex items-center space-x-3">
                               <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
@@ -2624,15 +2689,44 @@ const UnifiedCourseDetail = () => {
 
                   {/* Right Column - All Users in Database - Admin Only */}
                   {isAdmin && (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">Available Users</h3>
-                      <Badge variant="outline">
-                        {filteredAllUsers.length} available
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">
+                          {usersPagination.total} total users
+                        </Badge>
+                      </div>
                     </div>
 
-                    <div className="max-h-96 overflow-y-auto space-y-2">
+                    {/* Pagination Controls */}
+                    {usersPagination.pages > 1 && (
+                      <div className="flex items-center justify-between py-2">
+                        <div className="text-sm text-muted-foreground">
+                          Page {usersPagination.page} of {usersPagination.pages}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fetchAllUsers(usersPagination.page - 1, usersPagination.limit)}
+                            disabled={usersPagination.page <= 1}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => fetchAllUsers(usersPagination.page + 1, usersPagination.limit)}
+                            disabled={usersPagination.page >= usersPagination.pages}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="max-h-[50vh] overflow-y-auto space-y-2">
                       {filteredAllUsers.map((user) => (
                           <div
                             key={user._id}
@@ -3220,7 +3314,7 @@ const UnifiedCourseDetail = () => {
         setShowAddForm(null);
         setSelectedModuleId(null);
       }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>
               {showAddForm === 'module' && 'Add New Module'}
@@ -3242,37 +3336,35 @@ const UnifiedCourseDetail = () => {
 
           <div className="grid gap-4 py-4">
             {/* Title Field */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="title" className="text-right">
+            <div className="space-y-2">
+              <Label htmlFor="title">
                 Title
               </Label>
               <Input
                 id="title"
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
-                className="col-span-3"
                 placeholder="Enter title..."
               />
             </div>
 
             {/* Description Field */}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="description" className="text-right">
+            <div className="space-y-2">
+              <Label htmlFor="description">
                 Description
               </Label>
               <Textarea
                 id="description"
                 value={formData.description}
                 onChange={(e) => handleInputChange('description', e.target.value)}
-                className="col-span-3"
                 placeholder="Enter description..."
                 rows={3}
               />
             </div>
 
             {showAddForm === 'module' && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="order" className="text-right">
+              <div className="space-y-2">
+                <Label htmlFor="order">
                   Order
                 </Label>
                 <Input
@@ -3285,7 +3377,6 @@ const UnifiedCourseDetail = () => {
                       handleInputChange('order', value || '');
                     }
                   }}
-                  className="col-span-3"
                   min="1"
                 />
               </div>
@@ -3293,23 +3384,23 @@ const UnifiedCourseDetail = () => {
 
             {showAddForm === 'assessment' && (
               <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="type" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="type">
                     Type
                   </Label>
                   <select
                     id="type"
                     value={formData.type}
                     onChange={(e) => handleInputChange('type', e.target.value)}
-                    className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="quiz">Quiz</option>
                     <option value="assignment">Assignment</option>
                     <option value="exam">Exam</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="dueDate" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="dueDate">
                     Due Date
                   </Label>
                   <Input
@@ -3317,11 +3408,10 @@ const UnifiedCourseDetail = () => {
                     type="datetime-local"
                     value={formData.dueDate}
                     onChange={(e) => handleInputChange('dueDate', e.target.value)}
-                    className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="totalPoints" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="totalPoints">
                     Total Points
                   </Label>
                   <Input
@@ -3329,15 +3419,14 @@ const UnifiedCourseDetail = () => {
                     type="number"
                     value={formData.totalPoints}
                     onChange={(e) => handleInputChange('totalPoints', parseInt(e.target.value))}
-                    className="col-span-3"
                     min="1"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="assessmentFiles" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="assessmentFiles">
                     Attachments
                   </Label>
-                  <div className="col-span-3">
+                  <div>
                     <Input
                       id="assessmentFiles"
                       type="file"
@@ -3369,23 +3458,23 @@ const UnifiedCourseDetail = () => {
 
             {showAddForm === 'session' && (
               <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="sessionType" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="sessionType">
                     Type
                   </Label>
                   <select
                     id="sessionType"
                     value={formData.type}
                     onChange={(e) => handleInputChange('type', e.target.value)}
-                    className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="live-class">Live Class</option>
                     <option value="office-hours">Office Hours</option>
                     <option value="review">Review Session</option>
                   </select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="scheduledAt" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="scheduledAt">
                     Scheduled At
                   </Label>
                   <Input
@@ -3393,11 +3482,10 @@ const UnifiedCourseDetail = () => {
                     type="datetime-local"
                     value={formData.scheduledAt}
                     onChange={(e) => handleInputChange('scheduledAt', e.target.value)}
-                    className="col-span-3"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="duration" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="duration">
                     Duration (min)
                   </Label>
                   <Input
@@ -3405,7 +3493,6 @@ const UnifiedCourseDetail = () => {
                     type="number"
                     value={formData.duration}
                     onChange={(e) => handleInputChange('duration', parseInt(e.target.value))}
-                    className="col-span-3"
                     min="1"
                   />
                 </div>
@@ -3413,15 +3500,14 @@ const UnifiedCourseDetail = () => {
             )}
 
             {showAddForm === 'announcement' && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="content" className="text-right">
+              <div className="space-y-2">
+                <Label htmlFor="content">
                   Content
                 </Label>
                 <Textarea
                   id="content"
                   value={formData.content}
                   onChange={(e) => handleInputChange('content', e.target.value)}
-                  className="col-span-3"
                   placeholder="Enter announcement content..."
                   rows={4}
                 />
@@ -3429,11 +3515,11 @@ const UnifiedCourseDetail = () => {
             )}
 
             {showAddForm === 'material' && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="materialFile" className="text-right">
+              <div className="space-y-2">
+                <Label htmlFor="materialFile">
                   File
                 </Label>
-                <div className="col-span-3">
+                <div>
                   <Input
                     id="materialFile"
                     type="file"
@@ -3456,16 +3542,16 @@ const UnifiedCourseDetail = () => {
 
             {showAddForm === 'lesson' && (
               <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">
+                <div className="space-y-2">
+                  <Label>
                     Module
                   </Label>
-                  <div className="col-span-3 text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     {course.modules?.find(m => m._id === selectedModuleId)?.title || 'Unknown Module'}
                   </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="order" className="text-right">
+                <div className="space-y-2">
+                  <Label htmlFor="order">
                     Order
                   </Label>
                   <Input
@@ -3473,15 +3559,14 @@ const UnifiedCourseDetail = () => {
                     type="number"
                     value={formData.order || 1}
                     onChange={(e) => handleInputChange('order', parseInt(e.target.value))}
-                    className="col-span-3"
                     min="1"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">
+                <div className="space-y-2">
+                  <Label>
                     Content Files
                   </Label>
-                  <div className="col-span-3 text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     Files can be uploaded after creating the lesson.
                   </div>
                 </div>
@@ -3509,7 +3594,7 @@ const UnifiedCourseDetail = () => {
         setSelectedLessonId(null);
         setSelectedModuleId(null);
       }}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>
               {selectedLessonId ? 'Upload Files to Lesson' : 'Add Files to Module'}
@@ -3523,11 +3608,11 @@ const UnifiedCourseDetail = () => {
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">
+            <div className="space-y-2">
+              <Label>
                 {selectedLessonId ? 'Lesson' : 'Module'}
               </Label>
-              <div className="col-span-3 text-sm text-muted-foreground">
+              <div className="text-sm text-muted-foreground">
                 {selectedLessonId
                   ? course.modules?.flatMap(m => m.lessons)?.find(l => l._id === selectedLessonId)?.title || 'Unknown Lesson'
                   : course.modules?.find(m => m._id === selectedModuleId)?.title || 'Unknown Module'
@@ -3536,24 +3621,23 @@ const UnifiedCourseDetail = () => {
             </div>
 
             {!selectedLessonId && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="lessonTitle" className="text-right">
+              <div className="space-y-2">
+                <Label htmlFor="lessonTitle">
                   Lesson Title
                 </Label>
                 <Input
                   id="lessonTitle"
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
-                  className="col-span-3"
                   placeholder="Enter lesson title..."
                 />
               </div>
             )}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="files" className="text-right">
+            <div className="space-y-2">
+              <Label htmlFor="files">
                 Files
               </Label>
-              <div className="col-span-3">
+              <div>
                 <Input
                   id="files"
                   type="file"
@@ -3845,28 +3929,43 @@ const UnifiedCourseDetail = () => {
             {selectedAssessment?.attachments && selectedAssessment.attachments.length > 0 && (
               <div>
                 <Label>Attachments ({selectedAssessment.attachments.length})</Label>
-                <div className="space-y-2 mt-2">
-                  {selectedAssessment.attachments.map((attachment, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{attachment.originalName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {(attachment.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
+                <div className="space-y-3 mt-2">
+                  {selectedAssessment.attachments.map((attachment, index) => {
+                    const isImage = attachment.mimeType?.startsWith('image/');
+                    return (
+                      <div key={index} className="border rounded-lg p-3 bg-background">
+                        {isImage && (
+                          <div className="mb-3">
+                            <img 
+                              src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}`}
+                              alt={attachment.originalName}
+                              className="max-w-full h-auto rounded-lg border"
+                              style={{ maxHeight: '400px' }}
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Paperclip className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm font-medium">{attachment.originalName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {(attachment.size / 1024 / 1024).toFixed(2)} MB • {attachment.mimeType}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadAttachment(attachment)}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Download
+                          </Button>
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadAttachment(attachment)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        Download
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -3931,28 +4030,43 @@ const UnifiedCourseDetail = () => {
             {selectedAssessment?.attachments && selectedAssessment.attachments.length > 0 && (
               <div>
                 <Label>Assessment Attachments</Label>
-                <div className="space-y-2 mt-2">
-                  {selectedAssessment.attachments.map((attachment, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                      <div className="flex items-center space-x-2">
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{attachment.originalName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {(attachment.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
+                <div className="space-y-3 mt-2">
+                  {selectedAssessment.attachments.map((attachment, index) => {
+                    const isImage = attachment.mimeType?.startsWith('image/');
+                    return (
+                    <div key={index} className="border rounded-lg p-3 bg-background">
+                      {isImage && (
+                        <div className="mb-3">
+                          <img 
+                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}`}
+                            alt={attachment.originalName}
+                            className="max-w-full h-auto rounded-lg border"
+                            style={{ maxHeight: '300px' }}
+                          />
                         </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Paperclip className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">{attachment.originalName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(attachment.size / 1024 / 1024).toFixed(2)} MB • {attachment.mimeType}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDownloadAttachment(attachment)}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          Download
+                        </Button>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadAttachment(attachment)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        Download
-                      </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -4191,29 +4305,44 @@ const UnifiedCourseDetail = () => {
                       <Paperclip className="h-4 w-4 mr-2" />
                       Instructor Attachments ({selectedAssessment.attachments.length})
                     </h4>
-                    <div className="space-y-2">
-                      {selectedAssessment.attachments.map((attachment: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors">
-                          <div className="flex items-center space-x-3 flex-1 min-w-0">
-                            <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{attachment.originalName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {(attachment.size / 1024 / 1024).toFixed(2)} MB
-                              </p>
+                    <div className="space-y-3">
+                      {selectedAssessment.attachments.map((attachment: any, index: number) => {
+                        const isImage = attachment.mimeType?.startsWith('image/');
+                        return (
+                        <div key={index} className="border rounded-lg p-3 bg-background">
+                          {isImage && (
+                            <div className="mb-3">
+                              <img 
+                                src={`${import.meta.env.VITE_API_URL || 'http://localhost:5001/api'}/courses/${courseId}/assessments/${selectedAssessment._id}/attachments/${attachment.filename}`}
+                                alt={attachment.originalName}
+                                className="max-w-full h-auto rounded-lg border"
+                                style={{ maxHeight: '300px' }}
+                              />
                             </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <Paperclip className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">{attachment.originalName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {(attachment.size / 1024 / 1024).toFixed(2)} MB • {attachment.mimeType}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadAttachment(attachment)}
+                              className="flex-shrink-0"
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Download
+                            </Button>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDownloadAttachment(attachment)}
-                            className="flex-shrink-0"
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </Button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}

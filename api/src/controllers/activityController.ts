@@ -107,11 +107,16 @@ export const getMyActivities = async (req: AuthRequest, res: Response, next: Nex
         type: activity.type,
         title: activity.title,
         description: activity.description,
-        user: {
+        user: user ? {
           id: user._id,
           name: user.name,
           email: user.email,
           role: user.role
+        } : {
+          id: null,
+          name: 'Deleted User',
+          email: 'N/A',
+          role: 'N/A'
         },
         course: course ? {
           id: course._id,
@@ -358,7 +363,7 @@ export const exportActivities = async (req: AuthRequest, res: Response, next: Ne
         'Type': activity.type,
         'Title': activity.title,
         'Description': activity.description,
-        'User Name': user?.name || 'N/A',
+        'User Name': user?.name || 'Deleted User',
         'User Email': user?.email || 'N/A',
         'User Role': user?.role || 'N/A',
         'Course': course?.title || 'N/A',

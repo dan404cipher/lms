@@ -106,6 +106,7 @@ router.post('/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.sin
 router.get('/:courseId/assessments/:assessmentId/submissions', getAssessmentSubmissions);
 router.put('/:courseId/assessments/:assessmentId/submissions/:submissionId/grade', gradeAssessmentSubmission);
 router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId/download', downloadAssessmentAttachment);
+router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId', downloadAssessmentAttachment); // Serve inline for images
 router.get('/:courseId/assessments/:assessmentId/submissions/:submissionId/files/:filename', downloadSubmittedFile);
 
 export default router;

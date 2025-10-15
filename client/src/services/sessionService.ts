@@ -92,8 +92,9 @@ class SessionService {
     return response.data;
   }
 
-  async getSessions(courseId?: string): Promise<{ success: boolean; data: { sessions: Session[] } }> {
-    const params = courseId ? { courseId } : {};
+  async getSessions(courseId?: string, page: number = 1, limit: number = 10, sortBy: string = 'scheduledAt', sortOrder: 'asc' | 'desc' = 'desc'): Promise<{ success: boolean; data: { sessions: Session[]; pagination: { page: number; limit: number; total: number; pages: number } } }> {
+    const params: any = { page, limit, sortBy, sortOrder };
+    if (courseId) params.courseId = courseId;
     const response = await sessionAxios.get('/sessions', { params });
     return response.data;
   }

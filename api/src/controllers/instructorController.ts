@@ -1757,10 +1757,16 @@ export const getSessions = async (req: AuthRequest, res: Response, next: NextFun
       };
     }
 
+    // Handle sorting
+    const sortBy = req.query.sortBy as string || 'scheduledAt';
+    const sortOrder = req.query.sortOrder as string || 'desc';
+    const sortObj: any = {};
+    sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
     const sessions = await Session.find(query)
       .populate('courseId', 'title')
       .populate('instructorId', 'name')
-      .sort({ scheduledAt: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(limit);
 
@@ -1882,13 +1888,15 @@ export const getSessionParticipants = async (req: AuthRequest, res: Response, ne
       status: { $in: ['active', 'completed'] }
     }).populate('userId', 'name email');
 
-    const participants = enrollments.map(enrollment => ({
-      _id: (enrollment.userId as any)._id,
-      name: (enrollment.userId as any).name,
-      email: (enrollment.userId as any).email,
-      enrollmentDate: enrollment.enrolledAt,
-      status: enrollment.status
-    }));
+    const participants = enrollments
+      .filter(enrollment => enrollment.userId) // Filter out enrollments with deleted users
+      .map(enrollment => ({
+        _id: (enrollment.userId as any)._id,
+        name: (enrollment.userId as any).name,
+        email: (enrollment.userId as any).email,
+        enrollmentDate: enrollment.enrolledAt,
+        status: enrollment.status
+      }));
 
     res.json({
       success: true,

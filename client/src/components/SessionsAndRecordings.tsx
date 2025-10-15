@@ -41,32 +41,51 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
   const [showDeleteSessionModal, setShowDeleteSessionModal] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isDeletingSession, setIsDeletingSession] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalSessions, setTotalSessions] = useState(0);
+  const [sessionsPerPage] = useState(10);
+
+  useEffect(() => {
+    // Reset pagination when course changes
+    setCurrentPage(1);
+    loadData();
+  }, [courseId]);
 
   useEffect(() => {
     loadData();
-  }, [courseId]);
+  }, [currentPage]);
 
   const loadData = async () => {
     console.log('🎬 SessionsAndRecordings - loadData started:', {
       courseId,
       isInstructor,
-      isAdmin
+      isAdmin,
+      currentPage,
+      sessionsPerPage
     });
     
     try {
       setLoading(true);
       
-      // Load sessions first
+      // Load sessions with pagination
       console.log('🎬 Loading sessions for courseId:', courseId);
-      const sessionsResponse = await sessionService.getSessions(courseId);
+      const sessionsResponse = await sessionService.getSessions(courseId, currentPage, sessionsPerPage, 'scheduledAt', 'desc');
       console.log('🎬 Sessions response:', {
         success: sessionsResponse.success,
         sessionsCount: sessionsResponse.data?.sessions?.length || 0,
+        pagination: sessionsResponse.data?.pagination,
         sessions: sessionsResponse.data?.sessions
       });
       
       if (sessionsResponse.success) {
         setSessions(sessionsResponse.data.sessions);
+        if (sessionsResponse.data.pagination) {
+          setTotalPages(sessionsResponse.data.pagination.pages);
+          setTotalSessions(sessionsResponse.data.pagination.total);
+        }
       }
 
       // Load recordings separately with error handling
@@ -785,6 +804,77 @@ const SessionsAndRecordings = ({ courseId, isInstructor, isAdmin = false, onSess
         )}
       </div>
 
+      {/* Pagination Controls */}
+      {sessions.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6">
+          <div className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * sessionsPerPage) + 1} to {Math.min(currentPage * sessionsPerPage, totalSessions)} of {totalSessions} sessions
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              First
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            
+            {/* Page Numbers */}
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              Last
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Session Confirmation Modal */}
       <ConfirmationModal

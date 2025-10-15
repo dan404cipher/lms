@@ -95,9 +95,11 @@ export const register = async (req: Request, res: Response, next: NextFunction):
       data: {
         user: {
           id: user._id,
+          _id: user._id, // Include both for compatibility
           name: user.name,
           email: user.email,
-          role: user.role
+          role: user.role,
+          status: user.status
         },
         token,
         refreshToken
@@ -113,8 +115,11 @@ export const register = async (req: Request, res: Response, next: NextFunction):
 // @access  Public
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    console.log('🔍 Login attempt:', { email: req.body.email, passwordLength: req.body.password?.length });
+    
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ Validation errors:', errors.array());
       res.status(400).json({ 
         success: false, 
         errors: errors.array() 
@@ -123,10 +128,12 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     }
 
     const { email, password } = req.body;
+    console.log('📧 Looking for user with email:', email);
 
     // Check if user exists and password is correct
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
+      console.log('❌ User not found for email:', email);
       res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -134,8 +141,14 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
+    console.log('✅ User found:', { id: user._id, name: user.name, role: user.role, status: user.status });
+    console.log('🔐 Testing password...');
+
     const isPasswordCorrect = await user.comparePassword(password);
+    console.log('🔐 Password test result:', isPasswordCorrect);
+    
     if (!isPasswordCorrect) {
+      console.log('❌ Password incorrect');
       res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -169,9 +182,11 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
       data: {
         user: {
           id: user._id,
+          _id: user._id, // Include both for compatibility
           name: user.name,
           email: user.email,
           role: user.role,
+          status: user.status,
           credits: user.credits,
           profile: user.profile
         },
@@ -460,9 +475,28 @@ export const getProfile = async (req: AuthRequest, res: Response, next: NextFunc
   try {
     const user = await User.findById(req.user._id);
     
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+      return;
+    }
+    
     res.json({
       success: true,
-      data: { user }
+      data: { 
+        user: {
+          id: user._id,
+          _id: user._id, // Include both for compatibility
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          credits: user.credits,
+          profile: user.profile
+        }
+      }
     });
   } catch (error) {
     next(error);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -159,10 +160,10 @@ const LessonViewer = () => {
     fetchCourseAndLesson();
   }, [courseId, lessonId, isInstructor, isAdmin, navigate]);
 
-  // Load notes when lesson changes
+  // Load notes when lesson or user changes
   useEffect(() => {
     loadNotesFromStorage();
-  }, [courseId, lessonId]);
+  }, [courseId, lessonId, user?.id]);
 
   // Handle PDF loading when file changes
   useEffect(() => {
@@ -265,16 +266,16 @@ const LessonViewer = () => {
 
   // Auto-save notes to localStorage
   const saveNotesToStorage = (newNotes: string) => {
-    if (courseId && lessonId) {
-      const key = `notes_${courseId}_${lessonId}`;
+    if (courseId && lessonId && user?.id) {
+      const key = `notes_${user.id}_${courseId}_${lessonId}`;
       localStorage.setItem(key, newNotes);
     }
   };
 
   // Load notes from localStorage
   const loadNotesFromStorage = () => {
-    if (courseId && lessonId) {
-      const key = `notes_${courseId}_${lessonId}`;
+    if (courseId && lessonId && user?.id) {
+      const key = `notes_${user.id}_${courseId}_${lessonId}`;
       const savedNotes = localStorage.getItem(key);
       if (savedNotes) {
         setNotes(savedNotes);
@@ -349,7 +350,9 @@ const LessonViewer = () => {
   const progress = 25; // Mock progress - in real app, this would come from user progress
 
   return (
-    <div className="bg-background flex flex-col overflow-hidden" style={{ height: `calc(100vh - ${navHeight}px)` }}>
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      <div className="flex flex-col overflow-hidden" style={{ height: `calc(100vh - ${navHeight}px)` }}>
       {/* Main Content Area - No page scroll, only sidebar scrolls */}
       <div className="h-full grid grid-cols-1 lg:grid-cols-7 gap-0">
           {/* Main Content Column */}
@@ -361,8 +364,18 @@ const LessonViewer = () => {
                   <div className="flex-shrink-0 border-b bg-background/95 backdrop-blur py-3 -mx-6 px-6 mb-6">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <h1 className="text-lg font-semibold truncate">{course.title}</h1>
-                        <p className="text-sm text-muted-foreground truncate">{currentLesson.title}</p>
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="flex items-center gap-5 cursor-pointer" 
+                            onClick={() => navigate(`/courses/${courseId}`)}
+                          >
+                            <ChevronLeft className="h-6 w-6 font-bold" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h1 className="text-lg font-semibold truncate">{course.title}</h1>
+                            <p className="text-sm text-muted-foreground truncate">{currentLesson.title}</p>
+                          </div>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Button
@@ -774,6 +787,7 @@ const LessonViewer = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     );
   };

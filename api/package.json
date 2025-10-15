@@ -11,11 +11,10 @@
     "test": "jest",
     "test:email": "ts-node -r dotenv/config src/utils/emailTest.ts",
     "setup:email": "node scripts/setup-email.js",
-    "seed:activities": "ts-node -r dotenv/config scripts/seedActivities.ts",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "setup": "npm run build && node scripts/setup.js",
-    "seed": "ts-node scripts/seedDatabase.ts"
+    "seed:users": "ts-node -r dotenv/config scripts/seedUsers.ts"
   },
   "keywords": [
     "lms",

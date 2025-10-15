@@ -196,10 +196,16 @@ export const getSessions = async (req: AuthRequest, res: Response, next: NextFun
       };
     }
 
+    // Handle sorting
+    const sortBy = req.query.sortBy as string || 'scheduledAt';
+    const sortOrder = req.query.sortOrder as string || 'desc';
+    const sortObj: any = {};
+    sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
     const sessions = await Session.find(query)
       .populate('courseId', 'title')
       .populate('instructorId', 'name')
-      .sort({ scheduledAt: 1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(limit);
 

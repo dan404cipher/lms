@@ -963,6 +963,11 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         studentId: userId
       }).sort({ submittedAt: -1 });
 
+      // Count total submissions for this assessment (for instructors/admins)
+      const submissionsCount = await AssessmentSubmission.countDocuments({
+        assessmentId: assessment._id
+      });
+
       return {
         _id: assessment._id,
         title: assessment.title,
@@ -974,6 +979,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         instructions: assessment.instructions,
         timeLimit: assessment.timeLimit,
         createdAt: assessment.createdAt,
+        submissionsCount, // Add submissions count
         submission: submission ? {
           _id: submission._id,
           status: submission.status,
@@ -1736,27 +1742,29 @@ export const getAssessmentSubmissions = async (req: AuthRequest, res: Response, 
           dueDate: assessment.dueDate,
           totalPoints: assessment.totalPoints
         },
-        submissions: submissions.map(submission => ({
-          _id: submission._id,
-          student: {
-            _id: (submission.studentId as any)._id,
-            name: (submission.studentId as any).name,
-            email: (submission.studentId as any).email
-          },
-          status: submission.status,
-          score: submission.score,
-          maxScore: submission.maxScore,
-          feedback: submission.feedback,
-          submittedAt: submission.submittedAt,
-          gradedAt: submission.gradedAt,
-          gradedBy: submission.gradedBy ? {
-            _id: (submission.gradedBy as any)._id,
-            name: (submission.gradedBy as any).name
-          } : null,
-          isLate: submission.isLate,
-          attemptNumber: submission.attemptNumber,
-          files: submission.files,
-          content: submission.content
+        submissions: submissions
+          .filter(submission => submission.studentId) // Filter out submissions with deleted students
+          .map(submission => ({
+            _id: submission._id,
+            student: {
+              _id: (submission.studentId as any)._id,
+              name: (submission.studentId as any).name,
+              email: (submission.studentId as any).email
+            },
+            status: submission.status,
+            score: submission.score,
+            maxScore: submission.maxScore,
+            feedback: submission.feedback,
+            submittedAt: submission.submittedAt,
+            gradedAt: submission.gradedAt,
+            gradedBy: submission.gradedBy ? {
+              _id: (submission.gradedBy as any)._id,
+              name: (submission.gradedBy as any).name
+            } : null,
+            isLate: submission.isLate,
+            attemptNumber: submission.attemptNumber,
+            files: submission.files,
+            content: submission.content
         }))
       }
     });
@@ -1971,8 +1979,15 @@ export const downloadAssessmentAttachment = async (req: AuthRequest, res: Respon
       });
     }
 
-    // Set headers for file download
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    // Determine if it's an image to display inline or force download
+    const isImage = attachment.mimeType?.startsWith('image/');
+    
+    // Set headers for file download or inline display
+    if (isImage) {
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+    } else {
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    }
     res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
     res.setHeader('Content-Length', attachment.size);
 

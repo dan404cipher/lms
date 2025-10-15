@@ -345,6 +345,7 @@ class AdminService {
     type: string;
     dueDate: string;
     totalPoints: number;
+    instructor?: string; // Add instructor field
   }): Promise<AdminResponse<any>> {
     const response = await adminAxios.post(`/admin/courses/${courseId}/assessments`, assessmentData);
     return response.data;

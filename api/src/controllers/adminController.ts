@@ -8,6 +8,7 @@ import { Enrollment } from '../models/Enrollment';
 import { Session } from '../models/Session';
 import { Material } from '../models/Material';
 import { Assessment } from '../models/Assessment';
+import { AssessmentSubmission } from '../models/AssessmentSubmission';
 import SystemSettings from '../models/SystemSettings';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
@@ -457,6 +458,17 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       ? enrollments.reduce((sum: number, e: any) => sum + (e.progress?.completionPercentage || 0), 0) / enrollments.length 
       : 0;
 
+    // Add submission counts to assessments
+    const assessmentsWithCounts = await Promise.all(assessments.map(async (assessment: any) => {
+      const submissionsCount = await AssessmentSubmission.countDocuments({
+        assessmentId: assessment._id
+      });
+      return {
+        ...assessment.toObject(),
+        submissionsCount
+      };
+    }));
+
     // Create comprehensive course object with all data
     const courseDetail = {
       _id: course._id,
@@ -497,7 +509,7 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       })),
       // Additional data
       sessions,
-      assessments,
+      assessments: assessmentsWithCounts,
       materials,
       announcements,
       // Enrollment data for batch management
@@ -1442,7 +1454,7 @@ export const createLesson = async (req: AuthRequest, res: Response, next: NextFu
 export const createAssessment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { courseId } = req.params;
-    const { title, description, type, dueDate, totalPoints } = req.body;
+    const { title, description, type, dueDate, totalPoints, instructor } = req.body;
 
     const course = await Course.findById(courseId);
     if (!course) {
@@ -1452,8 +1464,12 @@ export const createAssessment = async (req: AuthRequest, res: Response, next: Ne
       });
     }
 
+    // Use provided instructor ID or fall back to course instructor or current admin
+    const instructorId = instructor || course.instructorId || req.user._id;
+
     const assessment = new Assessment({
       courseId,
+      instructorId, // Add instructor ID
       title,
       description,
       type,
