@@ -7,6 +7,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: 'learner' | 'instructor' | 'admin' | 'super_admin';
+  zoomEmail?: string; // Zoom account email for hosting meetings
   profile: {
     avatar?: string;
     bio?: string;
@@ -67,6 +68,14 @@ const userSchema = new Schema<IUser>({
     type: String,
     enum: ['learner', 'instructor', 'admin', 'super_admin'],
     default: 'learner'
+  },
+  zoomEmail: {
+    type: String,
+    lowercase: true,
+    match: [
+      /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
+      'Please enter a valid Zoom email'
+    ]
   },
   profile: {
     avatar: String,

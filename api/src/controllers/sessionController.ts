@@ -54,12 +54,31 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       }
     }
 
+    // Get instructor's Zoom email for multi-user support
+    const { User } = await import('../models/User');
+    const instructor = await User.findById(req.user._id);
+    const instructorZoomEmail = instructor?.zoomEmail;
+
+    console.log('📧 Instructor details:', {
+      instructorId: req.user._id,
+      instructorName: req.user.name,
+      instructorEmail: req.user.email,
+      zoomEmail: instructorZoomEmail
+    });
+
+    // Warn if instructor doesn't have a Zoom email configured
+    if (!instructorZoomEmail) {
+      console.warn('⚠️ WARNING: Instructor does not have a Zoom email configured. Meeting will be created under default Zoom account.');
+      console.warn('⚠️ This may cause issues with concurrent meetings. Please set zoomEmail for this user.');
+    }
+
     // Create Zoom meeting with real integration
     console.log('Creating Zoom meeting with data:', {
       topic: `${course.title} - ${title}`,
       start_time: new Date(scheduledAt).toISOString(),
       duration,
-      timezone: 'UTC'
+      timezone: 'UTC',
+      zoomHost: instructorZoomEmail || 'default (me)'
     });
 
     let zoomMeeting;
@@ -89,7 +108,7 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
           auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
           allow_multiple_devices: true
         }
-      });
+      }, instructorZoomEmail); // Pass instructor's Zoom email for multi-user support
 
       console.log('✅ Zoom meeting created successfully:', zoomMeeting.id);
       console.log('📹 Cloud recording enabled for meeting:', zoomMeeting.id);
