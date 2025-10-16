@@ -8,6 +8,7 @@ export interface ISession extends Document {
   scheduledAt: Date;
   duration: number; // in minutes
   zoomMeetingId?: string;
+  zoomHostEmail?: string; // The Zoom Pro account hosting this meeting
   joinUrl?: string;
   startUrl?: string;
   recordingUrl?: string;
@@ -55,6 +56,11 @@ const sessionSchema = new Schema<ISession>({
     max: [480, 'Duration cannot exceed 8 hours']
   },
   zoomMeetingId: String,
+  zoomHostEmail: {
+    type: String,
+    lowercase: true,
+    trim: true
+  },
   joinUrl: String,
   startUrl: String,
   recordingUrl: String,

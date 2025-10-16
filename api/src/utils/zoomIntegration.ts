@@ -137,7 +137,7 @@ class ZoomIntegration {
 
         const meetingPayload = {
           topic: meetingData.topic.substring(0, 200),
-          type: 2, // scheduled
+          type: 2, 
           start_time: meetingData.start_time,
           duration: meetingData.duration,
           timezone: meetingData.timezone || 'UTC',

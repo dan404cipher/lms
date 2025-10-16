@@ -8,6 +8,7 @@ import zoomIntegration from '../utils/zoomIntegration';
 import ActivityLogger from '../utils/activityLogger';
 import { RecordingUtils } from '../utils/recordingUtils';
 import { getNotificationService } from '../config/socket';
+import hostAssignmentService from '../services/hostAssignmentService';
 import fs from 'fs';
 import path from 'path';
 
@@ -54,31 +55,51 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       }
     }
 
-    // Get instructor's Zoom email for multi-user support
+    // Get instructor's preferred Zoom email (if set)
     const { User } = await import('../models/User');
     const instructor = await User.findById(req.user._id);
-    const instructorZoomEmail = instructor?.zoomEmail;
+    const instructorPreferredZoomEmail = instructor?.zoomEmail;
 
     console.log('📧 Instructor details:', {
       instructorId: req.user._id,
       instructorName: req.user.name,
       instructorEmail: req.user.email,
-      zoomEmail: instructorZoomEmail
+      preferredZoomEmail: instructorPreferredZoomEmail
     });
 
-    // Warn if instructor doesn't have a Zoom email configured
-    if (!instructorZoomEmail) {
-      console.warn('⚠️ WARNING: Instructor does not have a Zoom email configured. Meeting will be created under default Zoom account.');
-      console.warn('⚠️ This may cause issues with concurrent meetings. Please set zoomEmail for this user.');
+    // Assign an available Zoom host for this meeting
+    let assignedHost;
+    try {
+      assignedHost = await hostAssignmentService.assignHostToSession(
+        'temp', // Will update with actual session ID after creation
+        instructorPreferredZoomEmail
+      );
+
+      if (!assignedHost) {
+        res.status(503).json({
+          success: false,
+          message: 'All Zoom Pro accounts are currently hosting meetings. Please try again later or schedule for a different time.'
+        });
+        return;
+      }
+
+      console.log(`✅ Assigned Zoom host: ${assignedHost.email} (${assignedHost.currentMeetings}/${assignedHost.maxConcurrentMeetings} meetings)`);
+    } catch (error: any) {
+      console.error('❌ Failed to assign Zoom host:', error);
+      res.status(503).json({
+        success: false,
+        message: error.message || 'Failed to assign Zoom host for this meeting'
+      });
+      return;
     }
 
-    // Create Zoom meeting with real integration
+    // Create Zoom meeting with the assigned host
     console.log('Creating Zoom meeting with data:', {
       topic: `${course.title} - ${title}`,
       start_time: new Date(scheduledAt).toISOString(),
       duration,
       timezone: 'UTC',
-      zoomHost: instructorZoomEmail || 'default (me)'
+      zoomHost: assignedHost.email
     });
 
     let zoomMeeting;
@@ -108,7 +129,7 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
           auto_recording: 'cloud', // Use cloud recording (Pro plan feature)
           allow_multiple_devices: true
         }
-      }, instructorZoomEmail); // Pass instructor's Zoom email for multi-user support
+      }, assignedHost.email); // Use assigned Zoom host for multi-user support
 
       console.log('✅ Zoom meeting created successfully:', zoomMeeting.id);
       console.log('📹 Cloud recording enabled for meeting:', zoomMeeting.id);
@@ -117,10 +138,15 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
         join_url: zoomMeeting.join_url,
         start_url: zoomMeeting.start_url,
         password: zoomMeeting.password,
-        settings: zoomMeeting.settings
+        settings: zoomMeeting.settings,
+        assignedHost: assignedHost.email
       });
     } catch (zoomError) {
       console.error('❌ Failed to create Zoom meeting:', zoomError);
+      
+      // Release the assigned host since meeting creation failed
+      await hostAssignmentService.releaseHost(assignedHost.email);
+      
       res.status(500).json({
         success: false,
         message: 'Failed to create Zoom meeting. Please check your Zoom API configuration.',
@@ -138,6 +164,7 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
       type: type || 'live-class',
       maxParticipants,
       zoomMeetingId: zoomMeeting.id,
+      zoomHostEmail: assignedHost.email, // Track which Zoom host is assigned
       joinUrl: zoomMeeting.join_url,
       startUrl: zoomMeeting.start_url, // Store the host start URL
       instructorId: req.user._id
@@ -360,6 +387,12 @@ export const deleteSession = async (req: AuthRequest, res: Response, next: NextF
       });
       return;
       }
+    }
+
+    // Release the Zoom host if session had one assigned
+    if (session.zoomHostEmail) {
+      await hostAssignmentService.releaseHost(session.zoomHostEmail);
+      console.log(`🔓 Released Zoom host ${session.zoomHostEmail} after session deletion`);
     }
 
     await Session.findByIdAndDelete(req.params.id);
@@ -794,7 +827,16 @@ export const endSession = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     // Update session status to completed
-    await Session.findByIdAndUpdate(req.params.id, { status: 'completed' });
+    await Session.findByIdAndUpdate(req.params.id, { 
+      status: 'completed',
+      endedAt: new Date()
+    });
+
+    // Release the Zoom host
+    if (session.zoomHostEmail) {
+      await hostAssignmentService.releaseHost(session.zoomHostEmail);
+      console.log(`🔓 Released Zoom host ${session.zoomHostEmail} after session end`);
+    }
 
     // Send notification to course participants
     try {

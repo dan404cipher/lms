@@ -17,7 +17,9 @@
     "seed:users": "ts-node -r dotenv/config scripts/seedUsers.ts",
     "list-users": "ts-node -r dotenv/config scripts/listUsers.ts",
     "set-zoom-emails": "ts-node -r dotenv/config scripts/setZoomEmails.ts",
-    "update-user-zoom": "ts-node -r dotenv/config scripts/updateUserZoomEmail.ts"
+    "update-user-zoom": "ts-node -r dotenv/config scripts/updateUserZoomEmail.ts",
+    "init-zoom-hosts": "ts-node -r dotenv/config scripts/initializeZoomHosts.ts",
+    "sync-zoom-hosts": "ts-node -r dotenv/config scripts/syncZoomHosts.ts"
   },
   "keywords": [
     "lms",
