@@ -40,6 +40,8 @@ class ZoomIntegration {
   private tokenUrl = 'https://zoom.us/oauth/token';
   private accessToken: string | null = null;
   private tokenExpiry: number = 0;
+  private tokenRefreshPromise: Promise<string> | null = null;
+  private meetingCreationQueue: Promise<any> = Promise.resolve();
 
   constructor() {
     this.accountId = process.env.ZOOM_ACCOUNT_ID || '';
@@ -53,12 +55,34 @@ class ZoomIntegration {
   }
 
   private async getAccessToken(): Promise<string> {
-    if (this.accessToken && Date.now() < this.tokenExpiry) return this.accessToken;
+    // If we have a valid token, return it
+    if (this.accessToken && Date.now() < this.tokenExpiry) {
+      return this.accessToken;
+    }
 
+    // If there's already a token refresh in progress, wait for it
+    if (this.tokenRefreshPromise) {
+      return await this.tokenRefreshPromise;
+    }
+
+    // Start a new token refresh
+    this.tokenRefreshPromise = this.refreshAccessToken();
+    
+    try {
+      const token = await this.tokenRefreshPromise;
+      return token;
+    } finally {
+      this.tokenRefreshPromise = null;
+    }
+  }
+
+  private async refreshAccessToken(): Promise<string> {
     if (!this.clientId || !this.clientSecret || !this.accountId) {
       throw new Error('Zoom credentials not configured');
     }
 
+    console.log('🔄 Refreshing Zoom access token...');
+    
     const credentials = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64');
     const response = await axios.post(
       this.tokenUrl,
@@ -68,11 +92,14 @@ class ZoomIntegration {
           Authorization: `Basic ${credentials}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
+        timeout: 10000, // 10 second timeout
       }
     );
 
     this.accessToken = response.data.access_token;
-    this.tokenExpiry = Date.now() + response.data.expires_in * 1000 - 60000;
+    this.tokenExpiry = Date.now() + response.data.expires_in * 1000 - 60000; // Refresh 1 minute early
+    
+    console.log('✅ Zoom access token refreshed successfully');
     return this.accessToken!;
   }
 
@@ -92,50 +119,95 @@ class ZoomIntegration {
   // CREATE MEETING
   // -------------------
   async createMeeting(meetingData: ZoomMeetingData, userEmail?: string): Promise<ZoomMeeting> {
-    try {
-      if (!this.clientId || !this.clientSecret || !this.accountId) {
-        throw new Error('Zoom credentials not configured');
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (!this.clientId || !this.clientSecret || !this.accountId) {
+          throw new Error('Zoom credentials not configured');
+        }
+
+        if (!meetingData.topic || !meetingData.start_time || !meetingData.duration) {
+          throw new Error('Meeting topic, start_time, and duration are required');
+        }
+
+        const startTime = new Date(meetingData.start_time);
+        if (startTime <= new Date()) throw new Error('Meeting start time must be in the future');
+
+        const meetingPayload = {
+          topic: meetingData.topic.substring(0, 200),
+          type: 2, // scheduled
+          start_time: meetingData.start_time,
+          duration: meetingData.duration,
+          timezone: meetingData.timezone || 'UTC',
+          password: meetingData.password || this.generateMeetingPassword(),
+          settings: {
+            host_video: true,
+            participant_video: true,
+            join_before_host: true,
+            mute_upon_entry: true,
+            waiting_room: false,
+            auto_recording: 'cloud',
+            allow_multiple_devices: true,
+            ...meetingData.settings,
+          },
+        };
+
+        const targetUser = userEmail || 'me';
+        console.log(`🔄 Creating Zoom meeting (attempt ${attempt}/${maxRetries}) for user: ${targetUser}`);
+        
+        const response = await axios.post(
+          `${this.baseUrl}/users/${encodeURIComponent(targetUser)}/meetings`,
+          meetingPayload,
+          { 
+            headers: await this.getHeaders(),
+            timeout: 15000, // 15 second timeout
+          }
+        );
+
+        console.log('✅ Zoom meeting created successfully for user:', targetUser, 'ID:', response.data.id);
+        return response.data;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`❌ Error creating Zoom meeting (attempt ${attempt}/${maxRetries}):`, error.message);
+        
+        // Check if it's a token-related error that might be resolved by retrying
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          console.log('🔄 Token error detected, clearing cached token and retrying...');
+          this.accessToken = null;
+          this.tokenExpiry = 0;
+          this.tokenRefreshPromise = null;
+        }
+        
+        // If this is not the last attempt, wait before retrying
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          console.log(`⏳ Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
-
-      if (!meetingData.topic || !meetingData.start_time || !meetingData.duration) {
-        throw new Error('Meeting topic, start_time, and duration are required');
-      }
-
-      const startTime = new Date(meetingData.start_time);
-      if (startTime <= new Date()) throw new Error('Meeting start time must be in the future');
-
-      const meetingPayload = {
-        topic: meetingData.topic.substring(0, 200),
-        type: 2, // scheduled
-        start_time: meetingData.start_time,
-        duration: meetingData.duration,
-        timezone: meetingData.timezone || 'UTC',
-        password: meetingData.password || this.generateMeetingPassword(),
-        settings: {
-          host_video: true,
-          participant_video: true,
-          join_before_host: true,
-          mute_upon_entry: true,
-          waiting_room: false,
-          auto_recording: 'cloud',
-          allow_multiple_devices: true,
-          ...meetingData.settings,
-        },
-      };
-
-      const targetUser = userEmail || 'me';
-      const response = await axios.post(
-        `${this.baseUrl}/users/${encodeURIComponent(targetUser)}/meetings`,
-        meetingPayload,
-        { headers: await this.getHeaders() }
-      );
-
-      console.log('Zoom meeting created for user:', targetUser, 'ID:', response.data.id);
-      return response.data;
-    } catch (error) {
-      console.error('Error creating Zoom meeting:', error);
-      throw error;
     }
+
+    console.error('❌ Failed to create Zoom meeting after all retries');
+    throw lastError;
+  }
+
+  // -------------------
+  // CREATE MEETING (QUEUED)
+  // -------------------
+  async createMeetingQueued(meetingData: ZoomMeetingData, userEmail?: string): Promise<ZoomMeeting> {
+    // Queue the meeting creation to prevent concurrent requests
+    this.meetingCreationQueue = this.meetingCreationQueue.then(async () => {
+      // Add a small delay between sequential requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return this.createMeeting(meetingData, userEmail);
+    }).catch(error => {
+      console.error('Error in meeting creation queue:', error);
+      throw error;
+    });
+
+    return this.meetingCreationQueue;
   }
 
   // -------------------

@@ -75,7 +75,7 @@ export const createSession = async (req: AuthRequest, res: Response, next: NextF
         duration: duration
       });
 
-      zoomMeeting = await zoomIntegration.createMeeting({
+      zoomMeeting = await zoomIntegration.createMeetingQueued({
         topic: `${course.title} - ${title}`,
         start_time: startTimeISO,
         duration: parseInt(duration.toString()),
