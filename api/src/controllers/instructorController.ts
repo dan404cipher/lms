@@ -893,6 +893,67 @@ export const downloadMaterial = async (req: AuthRequest, res: Response, next: Ne
   }
 };
 
+// View material (inline display)
+export const viewMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { materialId } = req.params;
+    const userId = req.user._id;
+
+    // Find the material
+    const material = await Material.findById(materialId).populate('courseId');
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Check if user has access to this material (enrolled in course)
+    const enrollment = await Enrollment.findOne({
+      userId: userId,
+      courseId: material.courseId,
+      status: { $in: ['active', 'completed'] }
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: 'You must be enrolled in this course to access materials'
+      });
+    }
+
+    // Check if material has a file URL
+    if (!material.fileUrl) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material file not available'
+      });
+    }
+
+    // If it's a local file, serve it for viewing (inline)
+    if (material.fileUrl.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), material.fileUrl.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for inline viewing
+        res.setHeader('Content-Type', material.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${material.fileName || material.title}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.redirect(material.fileUrl);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const uploadMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     console.log('uploadMaterial - Starting upload process');
@@ -2180,6 +2241,70 @@ export const downloadLessonContent = async (req: AuthRequest, res: Response, nex
         fileName: file.name
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// View lesson content (inline display)
+export const viewLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, moduleId, lessonId, fileId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user has permission to access this course
+    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found or you do not have permission to access it'
+      });
+    }
+
+    // Find the lesson
+    const lesson = await Lesson.findOne({ _id: lessonId, moduleId });
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Find the specific file in the lesson
+    const file = lesson.files?.find(f => f._id.toString() === fileId);
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found in this lesson'
+      });
+    }
+
+    // Check if it's a local file
+    if (file.url.startsWith('/uploads/')) {
+      const path = require('path');
+      const fs = require('fs');
+      const filePath = path.join(process.cwd(), file.url.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for inline viewing
+        res.setHeader('Content-Type', file.type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'File not found on server'
+        });
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.redirect(file.url);
   } catch (error) {
     next(error);
   }

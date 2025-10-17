@@ -29,7 +29,8 @@ export const uploadFileLocally = async (file: Express.Multer.File, folder: strin
       originalName: file.originalname, 
       mimetype: file.mimetype, 
       size: file.size,
-      folder 
+      folder,
+      path: file.path
     });
     
     const fileExtension = file.originalname.split('.').pop() || 'file';
@@ -47,9 +48,18 @@ export const uploadFileLocally = async (file: Express.Multer.File, folder: strin
     const filePath = path.join(folderPath, fileName);
     console.log('File path:', filePath);
     
-    // Write file to disk
-    fs.writeFileSync(filePath, file.buffer);
-    console.log('File written successfully');
+    // Move file from temp directory to final location
+    if (file.path) {
+      // If file is already on disk (from diskStorage), move it
+      fs.renameSync(file.path, filePath);
+      console.log('File moved from temp to final location');
+    } else if ((file as any).buffer) {
+      // If file is in memory (from memoryStorage), write it
+      fs.writeFileSync(filePath, (file as any).buffer);
+      console.log('File written from buffer');
+    } else {
+      throw new Error('File has no path or buffer');
+    }
     
     // Return the file URL (relative to the API base URL)
     const fileUrl = `/uploads/${folder}/${fileName}`;

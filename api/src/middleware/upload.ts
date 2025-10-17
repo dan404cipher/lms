@@ -1,8 +1,33 @@
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 
-// Configure multer for file uploads
-const storage = multer.memoryStorage();
+// Ensure uploads directory exists
+const uploadsDir = path.resolve(__dirname, '../../uploads');
+const tempDir = path.join(uploadsDir, 'temp');
+
+// Create directories if they don't exist
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// Configure multer for file uploads using disk storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    // Store temporarily in temp directory
+    cb(null, tempDir);
+  },
+  filename: function (req, file, cb) {
+    // Generate unique filename with original extension
+    const fileExtension = path.extname(file.originalname);
+    const fileName = `${uuidv4()}${fileExtension}`;
+    cb(null, fileName);
+  }
+});
 
 // File filter function
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {

@@ -1158,6 +1158,22 @@ export const downloadCourseMaterial = async (req: AuthRequest, res: Response, ne
       return res.redirect(material.fileUrl);
     }
 
+    // If it's a local file, serve it for download
+    if (material.fileUrl && material.fileUrl.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), material.fileUrl.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for file download
+        res.setHeader('Content-Type', material.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${material.fileName || material.title}"`);
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
+
     // For file downloads, you would implement file serving logic here
     // This is a placeholder - you'd need to implement actual file serving
     res.json({
@@ -1165,6 +1181,102 @@ export const downloadCourseMaterial = async (req: AuthRequest, res: Response, ne
       message: 'File download not implemented yet',
       fileUrl: material.fileUrl
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    View course material (for inline display)
+// @route   GET /api/courses/:courseId/materials/:materialId/view
+// @access  Private (enrolled users)
+export const viewCourseMaterial = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, materialId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled in the course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if user is enrolled (for learners) or is instructor/admin
+    const isInstructor = course.instructorId.toString() === userId.toString();
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    
+    if (!isInstructor && !isAdmin) {
+      // For learners, check if they are enrolled
+      const enrollment = await Enrollment.findOne({
+        userId: userId,
+        courseId: courseId,
+        status: { $in: ['active', 'completed'] }
+      });
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to view materials'
+        });
+      }
+    }
+
+    // Find the material
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found'
+      });
+    }
+
+    // Check if material belongs to the course
+    if (material.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Material not found in this course'
+      });
+    }
+
+    // Check if material is published
+    if (!material.isPublished) {
+      return res.status(403).json({
+        success: false,
+        message: 'Material is not available for viewing'
+      });
+    }
+
+    if (material.type === 'link') {
+      if (!material.fileUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Link material has no URL'
+        });
+      }
+      return res.redirect(material.fileUrl);
+    }
+
+    // If it's a local file, serve it for viewing (inline)
+    if (material.fileUrl && material.fileUrl.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), material.fileUrl.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for inline viewing
+        res.setHeader('Content-Type', material.mimeType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${material.fileName || material.title}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
+
+    // If external URL, redirect
+    res.redirect(material.fileUrl || '');
   } catch (error) {
     next(error);
   }
@@ -1257,6 +1369,90 @@ export const downloadLessonContent = async (req: AuthRequest, res: Response, nex
         fileName: file.name
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    View lesson content file (inline display)
+// @route   GET /api/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/view
+// @access  Private (enrolled users)
+export const viewLessonContent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, moduleId, lessonId, fileId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled in the course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check if user is enrolled (for learners) or is instructor/admin
+    const isInstructor = course.instructorId.toString() === userId.toString();
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    
+    if (!isInstructor && !isAdmin) {
+      // For learners, check if they are enrolled
+      const enrollment = await Enrollment.findOne({
+        userId: userId,
+        courseId: courseId,
+        status: { $in: ['active', 'completed'] }
+      });
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be enrolled in this course to view lesson content'
+        });
+      }
+    }
+
+    // Find the lesson
+    const lesson = await Lesson.findOne({ _id: lessonId, moduleId });
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Find the specific file in the lesson
+    const file = lesson.files?.find(f => f._id.toString() === fileId);
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found in this lesson'
+      });
+    }
+
+    // Check if it's a local file
+    if (file.url.startsWith('/uploads/')) {
+      const filePath = path.join(process.cwd(), file.url.replace('/', ''));
+      
+      if (fs.existsSync(filePath)) {
+        // Set appropriate headers for inline viewing
+        res.setHeader('Content-Type', file.type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: 'File not found on server'
+        });
+      }
+    }
+
+    // If it's an external URL, redirect to it
+    res.redirect(file.url);
   } catch (error) {
     next(error);
   }
@@ -1998,6 +2194,107 @@ export const downloadAssessmentAttachment = async (req: AuthRequest, res: Respon
     }
     res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
     res.setHeader('Content-Length', attachment.size);
+
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    View assessment attachment (inline display)
+// @route   GET /api/courses/:courseId/assessments/:assessmentId/attachments/:attachmentId/view
+// @access  Private (Enrolled students, instructors, admins)
+export const viewAssessmentAttachment = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { courseId, assessmentId, attachmentId } = req.params;
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    // Check if course exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+
+    // Check access permissions
+    let hasAccess = false;
+    
+    if (userRole === 'learner') {
+      // Check if user is enrolled in the course
+      const enrollment = await Enrollment.findOne({ userId, courseId });
+      hasAccess = !!enrollment;
+    } else if (userRole === 'instructor') {
+      // Check if user is the instructor of this course
+      const instructorIdStr = course.instructorId ? course.instructorId.toString() : null;
+      const userIdStr = userId ? userId.toString() : null;
+      hasAccess = instructorIdStr === userIdStr;
+    } else if (['admin', 'super_admin'].includes(userRole)) {
+      // Admins have access to all courses
+      hasAccess = true;
+    }
+    
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to access this course'
+      });
+    }
+
+    // Find the assessment
+    const assessment = await Assessment.findById(assessmentId);
+    if (!assessment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    // Check if assessment belongs to the course
+    if (assessment.courseId.toString() !== courseId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment does not belong to this course'
+      });
+    }
+
+    // For learners, check if assessment is published
+    if (userRole === 'learner' && !assessment.isPublished) {
+      return res.status(403).json({
+        success: false,
+        message: 'Assessment is not published yet'
+      });
+    }
+
+    // Find the specific attachment
+    const attachment = assessment.attachments?.find(att => att.filename === attachmentId);
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment not found'
+      });
+    }
+
+    // Construct file path
+    const filePath = path.join(__dirname, '../../uploads/assessment-attachments', attachment.filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Set headers for inline viewing
+    res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+    res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', attachment.size);
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
 
     // Stream the file
     const fileStream = fs.createReadStream(filePath);

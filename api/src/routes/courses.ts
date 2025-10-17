@@ -19,7 +19,9 @@ import {
   deleteLesson,
   uploadLessonContent,
   downloadCourseMaterial,
+  viewCourseMaterial,
   downloadLessonContent,
+  viewLessonContent,
   markLessonComplete,
   getCourseAssessments,
   getAssessmentDetails,
@@ -27,6 +29,7 @@ import {
   getAssessmentSubmissions,
   gradeAssessmentSubmission,
   downloadAssessmentAttachment,
+  viewAssessmentAttachment,
   downloadSubmittedFile
 } from '../controllers/courseController';
 import { protect, authorize } from '../middleware/auth';
@@ -69,7 +72,9 @@ router.get('/:courseId/modules/:moduleId/lessons', getModuleLessons);
 router.use(protect);
 router.get('/:id/detail', getCourseDetail);
 router.get('/:courseId/materials/:materialId/download', downloadCourseMaterial);
+router.get('/:courseId/materials/:materialId/view', viewCourseMaterial);
 router.get('/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download', downloadLessonContent);
+router.get('/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/view', viewLessonContent);
 router.post('/:courseId/lessons/:lessonId/complete', markLessonComplete);
 
 // Assessment routes - All authenticated users (students, instructors, admins)
@@ -81,7 +86,8 @@ router.post('/:courseId/assessments/:assessmentId/submit', uploadAssessment.arra
 
 // Assessment attachment download routes - All authenticated users (students, instructors, admins)
 router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId/download', downloadAssessmentAttachment);
-router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId', downloadAssessmentAttachment); // Serve inline for images
+router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId/view', viewAssessmentAttachment);
+router.get('/:courseId/assessments/:assessmentId/attachments/:attachmentId', viewAssessmentAttachment); // Serve inline for images
 
 // Protected routes - Instructor and Admin only
 router.use(authorize('instructor', 'admin', 'super_admin'));

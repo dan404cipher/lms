@@ -39,6 +39,7 @@ import {
   downloadGeneralMaterial,
   uploadMaterial,
   downloadMaterial,
+  viewMaterial,
   updateMaterial,
   deleteMaterial,
   createAnnouncement,
@@ -46,6 +47,7 @@ import {
   deleteAnnouncement,
   uploadLessonContent,
   downloadLessonContent,
+  viewLessonContent,
   getEnrolledStudents
 } from '../controllers/instructorController';
 
@@ -95,6 +97,7 @@ router.put('/courses/:courseId/modules/:moduleId/lessons/:lessonId', updateLesso
 router.delete('/courses/:courseId/modules/:moduleId/lessons/:lessonId', deleteLesson);
 router.post('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content', upload.single('content'), handleMulterError, uploadLessonContent);
 router.get('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/download', downloadLessonContent);
+router.get('/courses/:courseId/modules/:moduleId/lessons/:lessonId/content/:fileId/view', viewLessonContent);
 
 // Session Management
 router.get('/sessions', getSessions);
@@ -132,6 +135,7 @@ router.get('/materials/:materialId/download', downloadGeneralMaterial);
 // Material Management
 router.post('/courses/:courseId/materials', upload.single('material'), handleMulterError, uploadMaterial);
 router.get('/courses/:courseId/materials/:materialId/download', downloadMaterial);
+router.get('/courses/:courseId/materials/:materialId/view', viewMaterial);
 router.put('/courses/:courseId/materials/:materialId', updateMaterial);
 router.delete('/courses/:courseId/materials/:materialId', deleteMaterial);
 
