@@ -13,6 +13,7 @@ import SystemSettings from '../models/SystemSettings';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
 import { Announcement } from '../models/Announcement';
+import { Recording } from '../models/Recording';
 import { uploadFileLocally, uploadAssessmentAttachment } from '../utils/fileUpload';
 import ActivityLogger from '../utils/activityLogger';
 import { getNotificationService } from '../config/socket';
@@ -438,6 +439,7 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       assessments,
       materials,
       announcements,
+      recordings,
       enrollments
     ] = await Promise.all([
       Module.find({ courseId }).sort({ order: 1 }),
@@ -448,6 +450,7 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       Assessment.find({ courseId }).sort({ dueDate: 1 }),
       Material.find({ courseId }).sort({ createdAt: -1 }),
       Announcement.find({ courseId }).sort({ createdAt: -1 }),
+      Recording.find({ courseId }).sort({ createdAt: -1 }),
       Enrollment.find({ courseId }).populate('userId', 'name email role')
     ]);
 
@@ -512,6 +515,7 @@ export const getCourseById = async (req: AuthRequest, res: Response, next: NextF
       assessments: assessmentsWithCounts,
       materials,
       announcements,
+      recordings,
       // Enrollment data for batch management
       enrollments: enrollments.map((enrollment: any) => ({
         _id: enrollment._id,
@@ -1911,10 +1915,20 @@ export const uploadLessonContent = async (req: AuthRequest, res: Response, next:
     const filePath = path.join(folderPath, fileName);
     console.log('uploadLessonContent - File path:', filePath);
     
-    // Write file to disk
-    console.log('uploadLessonContent - Writing file to disk...');
-    fs.writeFileSync(filePath, req.file.buffer);
-    console.log('uploadLessonContent - File written successfully');
+    // Move file from temp directory to final location
+    console.log('uploadLessonContent - Moving file to final location...');
+    if (req.file.path) {
+      // File is already on disk (from diskStorage), move it
+      fs.renameSync(req.file.path, filePath);
+      console.log('uploadLessonContent - File moved from temp to final location');
+    } else if ((req.file as any).buffer) {
+      // File is in memory (from memoryStorage), write it
+      fs.writeFileSync(filePath, (req.file as any).buffer);
+      console.log('uploadLessonContent - File written from buffer');
+    } else {
+      throw new Error('File has no path or buffer');
+    }
+    console.log('uploadLessonContent - File saved successfully');
 
     // Create file object for the lesson
     const fileObject = {

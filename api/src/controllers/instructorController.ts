@@ -1749,9 +1749,19 @@ export const uploadLessonContent = async (req: AuthRequest, res: Response, next:
     const filePath = path.join(folderPath, fileName);
     console.log('uploadLessonContent (instructor) - File path:', filePath);
     
-    // Write file to disk
-    fs.writeFileSync(filePath, req.file.buffer);
-    console.log('uploadLessonContent (instructor) - File written successfully');
+    // Move file from temp directory to final location
+    if (req.file.path) {
+      // File is already on disk (from diskStorage), move it
+      fs.renameSync(req.file.path, filePath);
+      console.log('uploadLessonContent (instructor) - File moved from temp to final location');
+    } else if ((req.file as any).buffer) {
+      // File is in memory (from memoryStorage), write it
+      fs.writeFileSync(filePath, (req.file as any).buffer);
+      console.log('uploadLessonContent (instructor) - File written from buffer');
+    } else {
+      throw new Error('File has no path or buffer');
+    }
+    console.log('uploadLessonContent (instructor) - File saved successfully');
 
     // Create file object for the lesson
     const fileObject = {
@@ -2182,8 +2192,14 @@ export const downloadLessonContent = async (req: AuthRequest, res: Response, nex
     const { courseId, moduleId, lessonId, fileId } = req.params;
     const userId = req.user._id;
 
+    // Check if user is admin (admins can access any course)
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    
     // Check if user has permission to access this course
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    const course = isAdmin 
+      ? await Course.findOne({ _id: courseId })
+      : await Course.findOne({ _id: courseId, instructorId: userId });
+      
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -2252,8 +2268,14 @@ export const viewLessonContent = async (req: AuthRequest, res: Response, next: N
     const { courseId, moduleId, lessonId, fileId } = req.params;
     const userId = req.user._id;
 
+    // Check if user is admin (admins can access any course)
+    const isAdmin = ['admin', 'super_admin'].includes(req.user.role);
+    
     // Check if user has permission to access this course
-    const course = await Course.findOne({ _id: courseId, instructorId: userId });
+    const course = isAdmin 
+      ? await Course.findOne({ _id: courseId })
+      : await Course.findOne({ _id: courseId, instructorId: userId });
+      
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -2285,21 +2307,59 @@ export const viewLessonContent = async (req: AuthRequest, res: Response, next: N
       const fs = require('fs');
       const filePath = path.join(process.cwd(), file.url.replace('/', ''));
       
-      if (fs.existsSync(filePath)) {
-        // Set appropriate headers for inline viewing
-        res.setHeader('Content-Type', file.type || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
-        res.setHeader('Cache-Control', 'public, max-age=31536000');
-        
-        // Stream the file
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-        return;
-      } else {
+      if (!fs.existsSync(filePath)) {
         return res.status(404).json({
           success: false,
           message: 'File not found on server'
         });
+      }
+
+      const stat = fs.statSync(filePath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      // For video files, support range requests for seeking
+      if (file.type && file.type.startsWith('video/')) {
+        res.setHeader('Accept-Ranges', 'bytes');
+        
+        if (range) {
+          // Parse range header
+          const parts = range.replace(/bytes=/, '').split('-');
+          const start = parseInt(parts[0] || '0', 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          const chunksize = (end - start) + 1;
+
+          // Create read stream for the requested range
+          const fileStream = fs.createReadStream(filePath, { start, end });
+
+          // Set headers for partial content
+          res.status(206); // Partial Content
+          res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+          res.setHeader('Content-Length', chunksize.toString());
+          res.setHeader('Content-Type', file.type);
+
+          // Pipe the stream
+          fileStream.pipe(res);
+          return;
+        } else {
+          // No range requested - send entire file
+          res.setHeader('Content-Length', fileSize.toString());
+          res.setHeader('Content-Type', file.type);
+          
+          const fileStream = fs.createReadStream(filePath);
+          fileStream.pipe(res);
+          return;
+        }
+      } else {
+        // For non-video files, simple streaming
+        res.setHeader('Content-Type', file.type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        res.setHeader('Content-Length', fileSize.toString());
+        
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
       }
     }
 

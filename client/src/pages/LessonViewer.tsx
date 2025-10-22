@@ -349,6 +349,20 @@ const LessonViewer = () => {
   const currentFile = currentLesson.files?.[currentFileIndex];
   const progress = 25; // Mock progress - in real app, this would come from user progress
 
+  // Helper function to get proper video URL
+  const getFileUrl = (file: LessonFile) => {
+    // If it's a local file path, construct direct static file URL
+    if (file.url.startsWith('/uploads/')) {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+      // Remove '/api' from the end to get base server URL
+      const baseUrl = API_BASE_URL.replace('/api', '');
+      // Return direct static file URL (video tags can't send auth headers)
+      return `${baseUrl}${file.url}`;
+    }
+    // Otherwise return the URL as-is (for external URLs)
+    return file.url;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -443,12 +457,13 @@ const LessonViewer = () => {
                                       console.error('Video error:', e);
                                       const video = e.target as HTMLVideoElement;
                                       console.error('Video error details:', video.error);
+                                      console.error('Video src:', video.currentSrc);
                                       video.style.display = 'none';
                                       const fallback = document.getElementById('video-fallback');
                                       if (fallback) fallback.style.display = 'block';
                                     }}
                                   >
-                                    <source src={currentFile.url} type={currentFile.type} />
+                                    <source src={getFileUrl(currentFile)} type={currentFile.type} />
                                     Your browser does not support the video tag.
                                   </video>
                                   <div className="hidden text-center py-8" id="video-fallback">

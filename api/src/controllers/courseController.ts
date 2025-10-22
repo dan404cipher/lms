@@ -868,10 +868,15 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
       });
     }
 
+    // Check if user is admin or enrolled
+    const isAdmin = ['admin', 'super_admin'].includes(userRole);
+    const isInstructor = course.instructorId.toString() === userId.toString();
+    
     // Get user's enrollment and progress
     const enrollment = await Enrollment.findOne({ userId, courseId });
 
-    if (!enrollment) {
+    // Allow admins and instructors to view without enrollment, but require enrollment for regular users
+    if (!enrollment && !isAdmin && !isInstructor) {
       return res.status(403).json({
         success: false,
         message: 'You are not enrolled in this course'
@@ -891,16 +896,16 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
     const totalVideos = lessons.filter(l => l.files && l.files.some(f => f.type.startsWith('video/'))).length;
     const totalResources = lessons.filter(l => l.files && l.files.length > 0).length;
     
-    // Calculate actual progress based on completed lessons
-    const completedLessons = enrollment.progress.completedLessons || [];
+    // Calculate actual progress based on completed lessons (or default for non-enrolled admins/instructors)
+    const completedLessons = enrollment?.progress?.completedLessons || [];
     const totalLessons = lessons.length;
     const completedLessonsCount = completedLessons.length;
     
     // Calculate completion percentage based on actual completed lessons
     const actualCompletionPercentage = totalLessons > 0 ? Math.round((completedLessonsCount / totalLessons) * 100) : 0;
     
-    // Update enrollment progress if it's different from actual progress
-    if (enrollment.progress.completionPercentage !== actualCompletionPercentage) {
+    // Update enrollment progress if enrollment exists and progress is different from actual progress
+    if (enrollment && enrollment.progress.completionPercentage !== actualCompletionPercentage) {
       enrollment.progress.completionPercentage = actualCompletionPercentage;
       enrollment.progress.lastAccessedAt = new Date();
       await enrollment.save();
@@ -925,7 +930,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         title: `${course.courseCode || 'Course'}_Syllabus.pdf`,
         type: 'pdf' as const,
         size: '123 KB',
-        viewed: enrollment.progress.completionPercentage > 0
+        viewed: enrollment?.progress?.completionPercentage ? enrollment.progress.completionPercentage > 0 : false
       }
     ];
 
@@ -1045,7 +1050,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         totalRatings: course.stats?.totalRatings || 0,
         averageProgress: averageProgress
       },
-      lastAccessed: enrollment.progress.completionPercentage > 0 ? {
+      lastAccessed: enrollment?.progress?.completionPercentage && enrollment.progress.completionPercentage > 0 ? {
         type: 'resource' as const,
         title: 'NPV - Day 1.pdf',
         id: 'resource-1'
@@ -1433,21 +1438,59 @@ export const viewLessonContent = async (req: AuthRequest, res: Response, next: N
     if (file.url.startsWith('/uploads/')) {
       const filePath = path.join(process.cwd(), file.url.replace('/', ''));
       
-      if (fs.existsSync(filePath)) {
-        // Set appropriate headers for inline viewing
-        res.setHeader('Content-Type', file.type || 'application/octet-stream');
-        res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
-        res.setHeader('Cache-Control', 'public, max-age=31536000');
-        
-        // Stream the file
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-        return;
-      } else {
+      if (!fs.existsSync(filePath)) {
         return res.status(404).json({
           success: false,
           message: 'File not found on server'
         });
+      }
+
+      const stat = fs.statSync(filePath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      // For video files, support range requests for seeking
+      if (file.type && file.type.startsWith('video/')) {
+        res.setHeader('Accept-Ranges', 'bytes');
+        
+        if (range) {
+          // Parse range header
+          const parts = range.replace(/bytes=/, '').split('-');
+          const start = parseInt(parts[0] || '0', 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          const chunksize = (end - start) + 1;
+
+          // Create read stream for the requested range
+          const fileStream = fs.createReadStream(filePath, { start, end });
+
+          // Set headers for partial content
+          res.status(206); // Partial Content
+          res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+          res.setHeader('Content-Length', chunksize.toString());
+          res.setHeader('Content-Type', file.type);
+
+          // Pipe the stream
+          fileStream.pipe(res);
+          return;
+        } else {
+          // No range requested - send entire file
+          res.setHeader('Content-Length', fileSize.toString());
+          res.setHeader('Content-Type', file.type);
+          
+          const fileStream = fs.createReadStream(filePath);
+          fileStream.pipe(res);
+          return;
+        }
+      } else {
+        // For non-video files, simple streaming
+        res.setHeader('Content-Type', file.type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `inline; filename="${file.name}"`);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        res.setHeader('Content-Length', fileSize.toString());
+        
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
       }
     }
 
