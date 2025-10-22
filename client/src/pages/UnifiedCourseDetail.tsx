@@ -1124,8 +1124,8 @@ const UnifiedCourseDetail = () => {
           if (assessmentFiles && assessmentFiles.length > 0) {
             for (const file of Array.from(assessmentFiles)) {
               if (isAdmin) {
-                // Admin service doesn't have this method yet, skip for now
-                console.warn('Assessment file upload not available for admin yet');
+                // Use admin service to upload assessment attachment
+                await (service as any).uploadAssessmentAttachment(courseId, assessmentId, file);
               } else {
                 await (service as any).uploadCourseAssessmentAttachment(courseId, assessmentId, file);
               }
