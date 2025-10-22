@@ -984,6 +984,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         instructions: assessment.instructions,
         timeLimit: assessment.timeLimit,
         createdAt: assessment.createdAt,
+        attachments: assessment.attachments || [], // Include attachments
         submissionsCount, // Add submissions count
         submission: submission ? {
           _id: submission._id,
@@ -2226,11 +2227,12 @@ export const downloadAssessmentAttachment = async (req: AuthRequest, res: Respon
       });
     }
 
-    // Determine if it's an image to display inline or force download
+    // Determine if it's an image or video to display inline or force download
     const isImage = attachment.mimeType?.startsWith('image/');
+    const isVideo = attachment.mimeType?.startsWith('video/');
     
     // Set headers for file download or inline display
-    if (isImage) {
+    if (isImage || isVideo) {
       res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
     } else {
       res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);

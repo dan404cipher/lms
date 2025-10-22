@@ -238,6 +238,7 @@ export const getCourseDetail = async (req: AuthRequest, res: Response, next: Nex
         instructions: assessment.instructions,
         timeLimit: assessment.timeLimit,
         createdAt: assessment.createdAt,
+        attachments: assessment.attachments || [], // Include attachments
         submissionCount
       };
     }));
@@ -1506,8 +1507,16 @@ export const downloadAssessmentAttachment = async (req: AuthRequest, res: Respon
       });
     }
 
-    // Set headers for file download
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    // Determine if it's an image or video to display inline or force download
+    const isImage = attachment.mimeType?.startsWith('image/');
+    const isVideo = attachment.mimeType?.startsWith('video/');
+    
+    // Set headers for file download or inline display
+    if (isImage || isVideo) {
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.originalName}"`);
+    } else {
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+    }
     res.setHeader('Content-Type', attachment.mimeType);
     res.setHeader('Content-Length', attachment.size);
 
