@@ -1734,6 +1734,12 @@ const UnifiedCourseDetail = () => {
     setGradingScore(submission.score || 0);
     setGradingFeedback(submission.feedback || '');
     setShowGradingModal(true);
+    setShowAssessmentModal(false); // Close the assessment details modal
+  };
+
+  const handleBackFromGrading = () => {
+    setShowGradingModal(false);
+    setShowAssessmentModal(true); // Reopen the assessment details modal
   };
 
   // Assessment creation functions
@@ -4317,17 +4323,6 @@ const UnifiedCourseDetail = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => {
-                            // Open grading modal to view files
-                            openGradingModal(submission);
-                          }}
-                        >
-                          <Eye className="h-3 w-3 mr-1" />
-                          View Files
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
                           onClick={() => openGradingModal(submission)}
                         >
                           {submission.status === 'graded' ? 'Regrade' : 'Grade'}
@@ -4477,15 +4472,27 @@ const UnifiedCourseDetail = () => {
       <Dialog open={showGradingModal} onOpenChange={setShowGradingModal}>
         <DialogContent className="max-w-2xl w-full">
           <DialogHeader>
-            <DialogTitle>Grade Assessment Submission</DialogTitle>
-            <DialogDescription>
-              Grade the submission for {selectedSubmission?.student?.name}
-            </DialogDescription>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBackFromGrading}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+              <div>
+                <DialogTitle>Grade Assessment Submission</DialogTitle>
+                <DialogDescription>
+                  Grade the submission for {selectedSubmission?.student?.name}
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <div className="space-y-4">
             {selectedSubmission && (
               <>
-                <div className="p-3 bg-muted/30 rounded-lg">
+                <div className="p-3  rounded-lg">
                   <p className="text-sm">
                     <strong>Student:</strong> {selectedSubmission.student?.name || 'Unknown Student'}
                   </p>
@@ -4599,13 +4606,19 @@ const UnifiedCourseDetail = () => {
               </>
             )}
           </div>
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setShowGradingModal(false)}>
-              Cancel
+          <div className="flex justify-between space-x-2">
+            <Button variant="outline" onClick={handleBackFromGrading}>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Back
             </Button>
-            <Button onClick={handleGradeSubmission}>
-              Submit Grade
-            </Button>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={() => setShowGradingModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleGradeSubmission}>
+                Submit Grade
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
